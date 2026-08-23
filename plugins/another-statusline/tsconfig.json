@@ -1,0 +1,18 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"types": ["node"],
+		"typeRoots": ["~/.bun/install/global/node_modules/@types"],
+		"paths": {
+			"@oh-my-pi/pi-coding-agent": ["~/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent"],
+			"@oh-my-pi/pi-coding-agent/*": ["~/.bun/install/global/node_modules/@oh-my-pi/pi-coding-agent/dist/types/*"]
+		}
+	},
+	"include": ["index.ts", "core.ts", "segments/**/*.ts"],
+	"exclude": ["**/*.test.ts"]
+}

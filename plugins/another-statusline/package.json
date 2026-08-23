@@ -1,0 +1,6 @@
+{
+  "name": "another-statusline",
+  "version": "0.1.0",
+  "private": true,
+  "omp": { "extensions": ["./index.ts"] }
+}

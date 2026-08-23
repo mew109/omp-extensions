@@ -1,0 +1,41 @@
+{
+  "name": "omp-extensions",
+  "owner": { "name": "mew" },
+  "metadata": {
+    "description": "Personal omp plugins: another-statusline, code-mode, omp-cc-user, omp-segments-to-widgets"
+  },
+  "plugins": [
+    {
+      "name": "another-statusline",
+      "description": "Statusline widget combining path, git, PR, weather and stock segments",
+      "version": "0.1.0",
+      "category": "productivity",
+      "license": "MIT",
+      "source": "./plugins/another-statusline"
+    },
+    {
+      "name": "code-mode",
+      "description": "PTC-style code mode: restrict tools to eval/ask/read/write with a kernel tool bridge",
+      "version": "0.1.0",
+      "category": "development",
+      "license": "MIT",
+      "source": "./plugins/code-mode"
+    },
+    {
+      "name": "omp-cc-user",
+      "description": "Manage personal ~/.claude resources (skills, plugins, commands) and their omp visibility",
+      "version": "0.3.0",
+      "category": "productivity",
+      "license": "MIT",
+      "source": "./plugins/omp-cc-user"
+    },
+    {
+      "name": "omp-segments-to-widgets",
+      "description": "Procedure for moving OMP status-line segments into safe, width-aware extension widgets",
+      "version": "0.1.0",
+      "category": "development",
+      "license": "MIT",
+      "source": "./plugins/omp-segments-to-widgets"
+    }
+  ]
+}
