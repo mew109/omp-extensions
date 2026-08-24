@@ -1,5 +1,7 @@
 # Contributing to omp-cc-user
 
+English | [繁體中文](CONTRIBUTING-zh-tw.md)
+
 ## Layout
 
 - `skills/omp-cc-user/scripts/omp_cc_user.py` — all logic (stdlib + PyYAML)

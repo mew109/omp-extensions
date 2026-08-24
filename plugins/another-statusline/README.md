@@ -1,119 +1,121 @@
 # another-statusline extension
 
-將內建狀態列的 `path`、`git`、`pr` 三段合併成一個 widget(另加 Open-Meteo 天氣段與 Yahoo 股市段),顯示在編輯器下方。前三段**改寫自 omp 內建渲染器**(path = mpi、git = cpi、pr = dpi;格式與縮排策略於 2026-08 對照已安裝的 @oh-my-pi/pi-coding-agent bundle 驗證);weather 與 stock 為本擴充自製。
+English | [繁體中文](README-zh-tw.md)
 
-## 安裝
+Merges the built-in `path`, `git`, and `pr` statusline segments into one widget (plus an Open-Meteo weather segment and a Yahoo stock segment), shown below the editor. The first three are **rewritten from the omp built-in renderers** (path = mpi, git = cpi, pr = dpi; format and truncation verified in 2026-08 against the installed @oh-my-pi/pi-coding-agent bundle); weather and stock are original to this extension.
+
+## Install
 
     omp plugin marketplace add https://github.com/mew109/omp-extensions
     omp plugin install another-statusline@omp-extensions
 
-(本機開發時,`marketplace add` 改用 repo 路徑。)
+(For local development, use the repo path in `marketplace add`.)
 
-## 顯示
+## Display
 
-各段以兩格空格分隔,順序由設定檔 `segments` 決定(無設定檔時用 `index.ts` 的 `SEGMENTS` 預設:`path` → `git` → `pr` → `weather` → `stock`;最尾端的段最先縮):
+Two spaces separate segments. The `segments` config key sets the order (without a config file, the `SEGMENTS` default in `index.ts` applies: `path` → `git` → `pr` → `weather` → `stock`; the rightmost segment shrinks first):
 
-- **path**:folder 圖示 + 路徑。
-  - scratch 路徑(`os.tmpdir()`、`~/tmp`,Windows 另含 TEMP / TMP / SystemRoot\Temp):顯示相對路徑,換用 scratch 圖示。
-  - work 前綴(`~/Projects`、`/work`):去掉前綴。
-  - home 縮成 `~`(只匹配完整 path component)。
-  - 過長時保留右側(路徑尾端)。
-- **git**:`git status --porcelain=v1 --branch` → `<branch-icon> <branch> *N +N ?N`(N = unstaged / staged / untracked;0 值省略;無 branch 只剩計數)。
-- **pr**:`gh pr view --json number,url` → `<pr-icon> #<number>`,hyperlink 指向 PR(目前佈局下 link 實際不輸出,見「hyperlink(OSC 8)」)。
-- **weather**:Open-Meteo API(無 key),顯示**下個整點**的預報:
-  - `WEATHER_LANG: "zh"`(預設):`<emoji> <H>時: <天氣> <溫度>°C <降雨機率>%`
-  - `WEATHER_LANG: "en"`:`<emoji> <weather> <temp>°C <rain>% at <H>:00`(小時移到句尾)
-  - `H` = 該整點的小時(24 小時制、不補零);降雨機率為該時隙的值,API 無機率資料時省略;未知 WMO code 省略天氣標籤。
-  - 英文標籤較長,weather 段 max 已放寬到 39 cells,容納最長組合(`freezing drizzle` + `100%`)仍不截斷。
-- **stock**:Yahoo Finance chart API(無 key):
-  - 格式 `<emoji> <指數名> <指數> <方向> <漲跌> <幅度>%`;emoji 與方向隨漲跌(📈▲ / 📉▼ / ➖─)。
-  - 漲跌與幅度帶 +/− 號、千分位、小數兩位;基準為前一交易日收盤,盤中為最新價。
-  - 當天(交易所時區)尚未成交——週末、假日或開盤前——只顯示 `💤 <指數名> <指數>`,不顯示漲跌(最近成交日非今日)。
+- **path**: folder icon + path.
+  - Scratch paths (`os.tmpdir()`, `~/tmp`; on Windows also TEMP / TMP / SystemRoot\Temp): shown as a relative path with the scratch icon.
+  - Work prefixes (`~/Projects`, `/work`): stripped.
+  - Home shortened to `~` (whole path components only).
+  - When too long, the tail (right end) is kept.
+- **git**: `git status --porcelain=v1 --branch` → `<branch-icon> <branch> *N +N ?N` (N = unstaged / staged / untracked; zero counts are omitted; without a branch, only the counts remain).
+- **pr**: `gh pr view --json number,url` → `<pr-icon> #<number>`, hyperlinked to the PR (links never actually emit under the current layout — see "Hyperlinks (OSC 8)").
+- **weather**: Open-Meteo API (no key). Shows the forecast for the **next full hour**:
+  - `WEATHER_LANG: "zh"` (default): `<emoji> <H>時: <天氣> <溫度>°C <降雨機率>%`
+  - `WEATHER_LANG: "en"`: `<emoji> <weather> <temp>°C <rain>% at <H>:00` (hour moves to the end)
+  - `H` is that hour in 24-hour form, unpadded; the rain probability is that slot's value, omitted when the API has none; unknown WMO codes drop the weather label.
+  - English labels are longer, so the weather segment's max is widened to 39 cells to fit the longest combination (`freezing drizzle` + `100%`) without truncation.
+- **stock**: Yahoo Finance chart API (no key):
+  - Format `<emoji> <index> <value> <direction> <change> <pct>%`; emoji and direction follow the move (📈▲ / 📉▼ / ➖─).
+  - Change and percent carry a sign, thousands separators, and two decimals; the baseline is the previous close, intraday values use the latest price.
+  - Before the day's first trade in the exchange's timezone — weekends, holidays, or pre-market — only `💤 <index> <value>` shows, without change data (the last trade was not today).
 
-非 git repo、無 PR、無天氣、無股市資料時該段不顯示(path 恆有);各段皆無時 widget 清空。
+A segment hides when its data is missing (not a git repo, no PR, no weather, no stock data); path always shows. When every segment hides, the widget clears.
 
-## 寬度
+## Width
 
-整行必須塞進一列:超寬時從最右段(`SEGMENTS` 尾端)開始縮,先縮到該段 min,再低於 min(下限 1)繼續往右縮,直到放得下。各段 cell 預算(max / min 定義在各 segment 檔):
+The whole line must fit one row. When too wide, segments shrink from the rightmost (`SEGMENTS` tail): first down to each segment's min, then below min (floor 1), moving left until the line fits. Cell budgets per segment (max / min live in each segment file):
 
-    path     max 40  min 24   (segments/path.ts,保留右側)
+    path     max 48  min 24   (segments/path.ts, keeps the tail)
     git      max 36  min 20   (segments/git.ts)
     pr       max 30  min 10   (segments/pr.ts)
     weather  max 39  min 20   (segments/weather.ts)
     stock    max 38  min 20   (segments/stock.ts)
 
-若 OSC 8 實際輸出,hyperlink 在縮排完成後才包上:若先包,寬度計算會把 escape 字元當成可見 cell,壞掉分配。
+Hyperlinks are wrapped after shrinking completes, when OSC 8 actually emits: wrapped earlier, the width math would count escape bytes as visible cells and break the allocation.
 
-## hyperlink(OSC 8)
+## Hyperlinks (OSC 8)
 
-path 段以官方 `fileHyperlink`、pr 與 stock 段以 `urlHyperlink` 包(由 index.ts 統一處理,segment 只回報 `href`)。是否真的輸出 OSC 8 由 `isHyperlinkEnabled()` 決定:`tui.hyperlinks` 設定(預設 auto)、終端能力偵測(kitty / ghostty / wezterm / iTerm / vscode / alacritty,或 tmux ≥ 3.4 且外層終端支援)、`NO_COLOR`。
+The path segment uses the official `fileHyperlink`; pr and stock use `urlHyperlink` (handled centrally in index.ts; segments only report `href`). Whether OSC 8 actually emits is decided by `isHyperlinkEnabled()`: the `tui.hyperlinks` setting (default auto), terminal detection (kitty / ghostty / wezterm / iTerm / vscode / alacritty, or tmux ≥ 3.4 with a supporting outer terminal), and `NO_COLOR`.
 
-實測(2026-08-22,omp v17.4.2,bun 全域安裝):extension import graph 裡的 `config/settings` instance(package source)與 cli.js bundle 內聯的不是同一個,host 的 `Settings.init()` 不會初始化它,`isSettingsInitialized()` 恆為 false,gate 恆關——**目前此佈局下 widget 行永遠是 plain text**,即使 `tui.hyperlinks: always` 或 `PI_FORCE_HYPERLINKS=1`。TUI 渲染器本身支援 OSC 8(寬度計算 ANSI-aware、逐行關閉 link);若 runtime 讓 extension 共用 host module registry(如 compiled binary),link 會自動生效,不需改程式碼。
+Measured (2026-08-22, omp v17.4.2, global bun install): the `config/settings` instance inside the extension import graph (package source) is not the one inlined into the cli.js bundle, so the host's `Settings.init()` never initializes it, `isSettingsInitialized()` stays false, and the gate stays closed — **under this layout the widget line is always plain text**, even with `tui.hyperlinks: always` or `PI_FORCE_HYPERLINKS=1`. The TUI renderer itself supports OSC 8 (ANSI-aware width math, per-line link close); if the runtime ever shares the host module registry with extensions (a compiled binary does), links start working with no code change.
 
-## 設定
+## Configuration
 
-### another-statusline.yml(本擴充)
+### another-statusline.yml (this extension)
 
-不改原始碼即可自訂 segment 順序與每段最大 / 最小寬度。設定檔:
+Reorder, hide, and resize segments without touching source. Config file:
 
     $PI_CODING_AGENT_DIR/another-statusline.yml
-    (未設環境變數時:~/.omp/agent/another-statusline.yml)
+    (without the env var: ~/.omp/agent/another-statusline.yml)
 
-YAML(JSON 亦合法),schema 模仿 omp 內建 `statusLine`:
+YAML (JSON also valid), schema modeled on omp's built-in `statusLine`:
 
-    segments: [path, git, pr, weather, stock]   # 順序 = 顯示順序(最尾端先縮)
+    segments: [path, git, pr, weather, stock]   # order = display order (tail shrinks first)
     segmentOptions:
       path: { max: 40, min: 10 }
       git: { max: 30, min: 8 }
 
-語義:
+Semantics:
 
-- `segments`:**整份取代** —— 列出的才顯示、順序照列表;不列出的即隱藏(這就是關閉某段的方法);未知 id 忽略並記 log;空陣列或缺 `segments` → 內建預設全列表。id 即「顯示」一節的五段:`path` / `git` / `pr` / `weather` / `stock`。
-- `segmentOptions.<id>.max` / `min`:正整數(≥1),合併後需 min ≤ max;單一欄位無效則忽略該欄位用內建值;min > max 則該段 max / min 全用內建值。無對應 segment 的 key 忽略。
-- **存檔即生效**:每次重繪(session_start / session_switch / turn_end / 背景資料落地)重新讀檔,不用重啟。
-- 檔案不存在 → 靜默用預設。讀取失敗(非不存在)或解析失敗 → 用預設 + 記 `/tmp/another-statusline-errors.log` + 每進程一次錯誤通知。
-- 天氣 / 股票的背景輪詢不受 `segments` 過濾影響:維持全部啟動(資料保溫,重新啟用零延遲)。
+- `segments`: **replaces the whole list** — only the listed ids show, in the given order; unlisted ids hide (this is how you turn a segment off); unknown ids are ignored and logged; an empty array or a missing `segments` falls back to the built-in default list. The ids are the five segments from "Display": `path` / `git` / `pr` / `weather` / `stock`.
+- `segmentOptions.<id>.max` / `min`: positive integers (≥1) with min ≤ max after the merge; an invalid single field is dropped and the built-in value applies; min > max drops both fields for that segment. Keys without a matching segment are ignored.
+- **Saving applies immediately**: every redraw (session_start / session_switch / turn_end / background data landing) re-reads the file; no restart.
+- Missing file → defaults, silently. Read failure (other than missing) or parse failure → defaults + one line in `/tmp/another-statusline-errors.log` + one error notification per process.
+- The weather / stock background pollers ignore the `segments` filter: all of them stay started, so data stays cached and re-enabling is instant.
 
-各段預設寬度見「寬度」一節的表;`segmentOptions` 覆蓋之。
+Default widths per segment are in the table under "Width"; `segmentOptions` overrides them.
 
-### config.yml:內建 statusline
+### config.yml: built-in statusline
 
-安裝本擴充後,`path` / `git` / `pr` 需從內建 statusline 的 `leftSegments` 移除,避免與 widget 重複顯示(唯一與本擴充相關的一步)。
+After installing this extension, remove `path` / `git` / `pr` from the built-in statusline's `leftSegments` so they do not duplicate the widget (the only step that concerns this extension).
 
-以下為 omp 內建 statusline 的一般設定法,**與本擴充無關**,僅供調整內建列時參考。`~/.omp/agent/config.yml` 的 `statusLine` 段:
+What follows is general configuration for omp's built-in statusline, **unrelated to this extension** — kept as a reference for tuning the built-in line. The `statusLine` block of `~/.omp/agent/config.yml`:
 
-- `preset`:內建佈局,`default` / `minimal` / `compact` / `full` / `nerd` / `ascii` / `custom`。只有 `custom` 時 `leftSegments` / `rightSegments` 才生效(其他 preset 會忽略使用者陣列,直接用 preset 值)。
-- `leftSegments` / `rightSegments`:**陣列順序即顯示順序**;拿掉某個 id 該段就不顯示;未知 id 靜默忽略(不報錯)。`preset: custom` 但沒給陣列時,回落 `custom` preset 預設(`model,mode,path,git,pr` / `session_name,token_total,cost,context_pct`)。
-- `segmentOptions`:逐段細調(選項見下表);不給該段選項時用內建預設。
-- `separator`:段間分隔,`powerline-thin`(預設)/ `powerline` / `slash` / `pipe` / `block` / `none` / `ascii`。
+- `preset`: built-in layout — `default` / `minimal` / `compact` / `full` / `nerd` / `ascii` / `custom`. `leftSegments` / `rightSegments` take effect only under `custom` (other presets ignore user arrays and use preset values).
+- `leftSegments` / `rightSegments`: **array order is display order**; dropping an id hides that segment; unknown ids are silently ignored. `preset: custom` without arrays falls back to the `custom` preset defaults (`model,mode,path,git,pr` / `session_name,token_total,cost,context_pct`).
+- `segmentOptions`: per-segment tuning (options in the table below); segments without options use built-in defaults.
+- `separator`: segment divider — `powerline-thin` (default) / `powerline` / `slash` / `pipe` / `block` / `none` / `ascii`.
 
-有效 id(24 個,左右皆可放):
+Valid ids (24, either side):
 
-| id | 顯示內容 |
+| id | Shows |
 |---|---|
-| `pi` | omp logo + 模式徽章(plan / vibe / goal / loop / prewalk / worktree) |
-| `model` | 模型名;`segmentOptions.model.showThinkingLevel: true` 時加思考等級 |
-| `mode` | 目前模式 |
-| `path` | 專案路徑;選項 `abbreviate`(預設 true)/ `maxLength`(預設 40)/ `stripWorkPrefix`(預設 true) |
-| `git` | branch + `*N +N ?N`(unstaged / staged / untracked);選項 `showBranch` / `showStaged` / `showUnstaged` / `showUntracked` |
-| `pr` | 目前 PR 編號(無 PR 隱藏) |
-| `subagents` | 執行中 subagent 數(0 隱藏) |
-| `token_in` / `token_out` / `token_total` | session 累計 input / output / 總 token |
-| `token_rate` | 即時 tokens/秒 |
-| `cost` | session 花費($) |
-| `context_pct` | context 使用 % |
-| `context_total` | context window 容量 |
-| `time_spent` | session 活躍時間(<1s 隱藏) |
-| `time` | 目前時間;選項 `format`(`12h` / `24h`)/ `showSeconds` |
-| `session` | session id 前 8 碼 |
-| `session_name` | session 名稱 |
-| `hostname` | 主機名(不含網域) |
-| `cache_read` / `cache_write` | 快取讀 / 寫 token |
-| `cache_hit` | 快取命中率 %(0 隱藏) |
-| `usage` | provider 配額使用(5h / 7d / 月;無配額資料隱藏) |
-| `collab` | collab 角色 + 參與者數(非 collab 隱藏) |
+| `pi` | omp logo + mode badge (plan / vibe / goal / loop / prewalk / worktree) |
+| `model` | model name; adds the thinking level when `segmentOptions.model.showThinkingLevel: true` |
+| `mode` | current mode |
+| `path` | project path; options `abbreviate` (default true) / `maxLength` (default 40) / `stripWorkPrefix` (default true) |
+| `git` | branch + `*N +N ?N` (unstaged / staged / untracked); options `showBranch` / `showStaged` / `showUnstaged` / `showUntracked` |
+| `pr` | current PR number (hidden without a PR) |
+| `subagents` | running subagent count (hidden at 0) |
+| `token_in` / `token_out` / `token_total` | session input / output / total tokens |
+| `token_rate` | live tokens/s |
+| `cost` | session spend ($) |
+| `context_pct` | context usage % |
+| `context_total` | context window capacity |
+| `time_spent` | active session time (hidden below 1s) |
+| `time` | current time; options `format` (`12h` / `24h`) / `showSeconds` |
+| `session` | first 8 chars of the session id |
+| `session_name` | session name |
+| `hostname` | hostname (no domain) |
+| `cache_read` / `cache_write` | cache read / write tokens |
+| `cache_hit` | cache hit rate % (hidden at 0) |
+| `usage` | provider quota usage (5h / 7d / monthly; hidden without quota data) |
+| `collab` | collab role + participant count (hidden outside collab) |
 
-範例(目前配置:左側 `pi → model → mode → collab → context_pct → cost → usage`,右側 `session_name`,model 段開思考等級;`path` / `git` / `pr` 已拿掉——這三段由本擴充的 widget 顯示):
+Example (current setup: left `pi → model → mode → collab → context_pct → cost → usage`, right `session_name`, thinking level on the model segment; `path` / `git` / `pr` removed — the widget shows those three):
 
     statusLine:
       preset: custom
@@ -131,14 +133,14 @@ YAML(JSON 亦合法),schema 模仿 omp 內建 `statusLine`:
         model:
           showThinkingLevel: true
 
-改順序:重排陣列(如把 `cost` 移到 `context_pct` 前);刪段:拿掉該行(如不要 `usage` 就刪 `- usage`);加段:補 id(如左側加 `hostname`、右側加 `time_spent`)。
+Reorder by moving array entries (e.g. `cost` before `context_pct`); delete a segment by dropping its line (e.g. remove `- usage`); add one by inserting an id (e.g. `hostname` on the left, `time_spent` on the right).
 
-## 移除
+## Uninstall
 
     omp plugin uninstall another-statusline@omp-extensions
 
-必要時把 `path` / `git` / `pr` 加回 `statusLine.leftSegments`。
+If needed, add `path` / `git` / `pr` back to `statusLine.leftSegments`.
 
-## 開發
+## Development
 
-檔案結構、新增 segment、原始碼常數、測試與重繪時機見 [CONTRIBUTING.md](CONTRIBUTING.md)。
+File layout, adding segments, source constants, tests, and redraw triggers are in [CONTRIBUTING.md](CONTRIBUTING.md).
