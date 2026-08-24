@@ -107,12 +107,24 @@ def pop_legacy_ignored(cfg, names):
     return removed
 
 
-def find_skill(name):
+def find_skills(patterns):
+    """Ordered unique skill names matching each pattern.
+
+    Pattern matches via fnmatch (exact name = literal pattern). Zero matches
+    for any pattern -> today's error message + available list, exit 1.
+    """
     names = [n for n, _, _ in discover()]
-    if name not in names:
-        print(f"error: skill '{name}' not found in ~/.claude/skills")
-        print("available: " + ", ".join(sorted(names)))
-        sys.exit(1)
+    out = []
+    for pat in patterns:
+        m = sorted(n for n in names if fnmatch.fnmatch(n, pat))
+        if not m:
+            print(f"error: skill '{pat}' not found in ~/.claude/skills")
+            print("available: " + ", ".join(sorted(names)))
+            sys.exit(1)
+        for n in m:
+            if n not in out:
+                out.append(n)
+    return out
 
 
 def cmd_skill_list(_args):
@@ -136,48 +148,61 @@ def cmd_skill_list(_args):
 
 
 def cmd_skill_disable(args):
-    find_skill(args.name)
+    targets = find_skills(args.names)
     cfg = load_cfg()
-    key = f"skill:{args.name}"
-    legacy = pop_legacy_ignored(cfg, [args.name])
-    ext = cfg.setdefault("disabledExtensions", [])
-    if key in ext:
-        if legacy:
-            save_cfg(cfg)
-            print(f"{args.name}: already disabled — migrated off legacy skills.ignoredSkills")
-            print("run /reload-plugins (or restart omp) to apply")
-        else:
-            print(f"{args.name}: already disabled in omp — nothing to change")
-        return
-    ext.append(key)
-    save_cfg(cfg)
-    note = " (migrated off legacy skills.ignoredSkills)" if legacy else ""
-    print(f"{args.name}: disabled — added {key} to disabledExtensions{note}")
-    print("run /reload-plugins (or restart omp) to apply")
+    lines, changed = [], False
+    for name in targets:
+        key = f"skill:{name}"
+        legacy = pop_legacy_ignored(cfg, [name])
+        ext = cfg.setdefault("disabledExtensions", [])
+        if key in ext:
+            if legacy:
+                changed = True
+                lines.append(f"{name}: already disabled — migrated off legacy skills.ignoredSkills")
+            else:
+                lines.append(f"{name}: already disabled in omp — nothing to change")
+            continue
+        ext.append(key)
+        changed = True
+        note = " (migrated off legacy skills.ignoredSkills)" if legacy else ""
+        lines.append(f"{name}: disabled — added {key} to disabledExtensions{note}")
+    if changed:
+        save_cfg(cfg)
+    for ln in lines:
+        print(ln)
+    if changed:
+        print("run /reload-plugins (or restart omp) to apply")
 
 
 def cmd_skill_enable(args):
-    find_skill(args.name)
+    targets = find_skills(args.names)
     cfg = load_cfg()
-    key = f"skill:{args.name}"
-    if not skill_off(args.name, ignored_set(cfg), ext_ids(cfg)):
-        print(f"{args.name}: already visible in omp — nothing to change")
-        return
-    had_key = key in (cfg.get("disabledExtensions") or [])
-    ext = [e for e in cfg.get("disabledExtensions") or [] if e != key]
-    if ext:
-        cfg["disabledExtensions"] = ext
-    else:
-        cfg.pop("disabledExtensions", None)
-    legacy = pop_legacy_ignored(cfg, [args.name])
-    save_cfg(cfg)
-    bits = ([key] if had_key else []) + ([f"legacy ignoredSkills entry {args.name}"] if legacy else [])
-    print(f"{args.name}: enabled — removed {' and '.join(bits)}")
-    globs = [p for p in ignored_set(cfg)
-             if any(c in p for c in "*?[") and fnmatch.fnmatch(args.name, p)]
-    if globs:
-        print(f"note: skills.ignoredSkills glob {', '.join(globs)} still hides {args.name}")
-    print("run /reload-plugins (or restart omp) to apply")
+    lines, changed = [], False
+    for name in targets:
+        key = f"skill:{name}"
+        if not skill_off(name, ignored_set(cfg), ext_ids(cfg)):
+            lines.append(f"{name}: already visible in omp — nothing to change")
+            continue
+        had_key = key in (cfg.get("disabledExtensions") or [])
+        ext = [e for e in cfg.get("disabledExtensions") or [] if e != key]
+        if ext:
+            cfg["disabledExtensions"] = ext
+        else:
+            cfg.pop("disabledExtensions", None)
+        legacy = pop_legacy_ignored(cfg, [name])
+        changed = True
+        bits = ([key] if had_key else []) + ([f"legacy ignoredSkills entry {name}"] if legacy else [])
+        lines.append(f"{name}: enabled — removed {' and '.join(bits)}")
+        globs = [p for p in ignored_set(cfg)
+                 if any(c in p for c in "*?[") and fnmatch.fnmatch(name, p)]
+        if globs:
+            lines.append(f"note: skills.ignoredSkills glob {', '.join(globs)} still hides {name}")
+    if changed:
+        save_cfg(cfg)
+    for ln in lines:
+        print(ln)
+    if changed:
+        print("run /reload-plugins (or restart omp) to apply")
 
 
 # --- plugin resource (ported from claude-plugin) ---
@@ -188,17 +213,40 @@ def plugins():
         data = json.load(f)
     return {k: v[0]["installPath"] for k, v in data.get("plugins", {}).items()}
 
+def resolve_many(patterns):
+    """Ordered unique (key, installPath) pairs for names/globs.
 
-def resolve(name):
+    Non-glob pattern: exact key, else unique short-name match, else the
+    current errors (no match / ambiguous). Glob pattern (contains * ? [):
+    fnmatch against full key and short name, >=1 match required, matches
+    sorted. Any failure exits before the caller touches config.
+    """
     keys = plugins()
-    if name in keys:
-        return name, keys[name]
-    partial = [k for k in keys if k.split("@")[0] == name]
-    if not partial:
-        sys.exit(f"error: no plugin matching {name!r}\nAvailable: " + "\n  ".join(sorted(keys)))
-    if len(partial) > 1:
-        sys.exit(f"error: ambiguous name {name!r}, matches:\n  " + "\n  ".join(sorted(partial)))
-    return partial[0], keys[partial[0]]
+    out, seen = [], set()
+    for pat in patterns:
+        if any(c in pat for c in "*?["):
+            picked = sorted(k for k in keys
+                            if fnmatch.fnmatch(k, pat)
+                            or fnmatch.fnmatch(k.split("@")[0], pat))
+            if not picked:
+                sys.exit(f"error: no plugin matching {pat!r}\nAvailable: "
+                         + "\n  ".join(sorted(keys)))
+        elif pat in keys:
+            picked = [pat]
+        else:
+            partial = [k for k in keys if k.split("@")[0] == pat]
+            if not partial:
+                sys.exit(f"error: no plugin matching {pat!r}\nAvailable: "
+                         + "\n  ".join(sorted(keys)))
+            if len(partial) > 1:
+                sys.exit(f"error: ambiguous name {pat!r}, matches:\n  "
+                         + "\n  ".join(sorted(partial)))
+            picked = [partial[0]]
+        for k in picked:
+            if k not in seen:
+                seen.add(k)
+                out.append((k, keys[k]))
+    return out
 
 
 def inventory(install_path, plugin_name):
@@ -228,30 +276,46 @@ def inventory(install_path, plugin_name):
             obj = obj["mcpServers"]
         return list(obj.keys())
 
-    mcp = os.path.join(p, ".mcp.json")
-    if os.path.isfile(mcp):
-        try:
-            with open(mcp) as f:
-                inv["mcp"] += mcp_keys(json.load(f))
-        except (json.JSONDecodeError, OSError):
-            pass
-    pj = os.path.join(p, ".claude-plugin", "plugin.json")
-    if os.path.isfile(pj):
+    mcp_raw, declared = None, False
+    for manifest_dir in (".omp-plugin", ".claude-plugin"):
+        pj = os.path.join(p, manifest_dir, "plugin.json")
+        if not os.path.isfile(pj):
+            continue
         try:
             with open(pj) as f:
                 meta = json.load(f)
-            srv = meta.get("mcpServers") if isinstance(meta, dict) else None
-            if isinstance(srv, str):
-                sp = os.path.join(p, srv)
-                if os.path.isfile(sp):
-                    with open(sp) as f:
-                        inv["mcp"] += mcp_keys(json.load(f))
-            elif isinstance(srv, dict):
-                inv["mcp"] += list(srv.keys())
         except (json.JSONDecodeError, OSError):
-            pass
+            continue
+        if not isinstance(meta, dict):
+            continue
+        ptr = meta.get("mcpServers")
+        if isinstance(ptr, dict):          # inline server map
+            mcp_raw, declared = ptr, True
+            break
+        if isinstance(ptr, str) and ptr.strip():
+            declared = True
+            sp = os.path.normpath(os.path.join(p, ptr.strip()))
+            inside = sp == p or sp.startswith(p + os.sep)
+            if inside:
+                try:
+                    with open(sp) as f:
+                        doc = json.load(f)
+                except (json.JSONDecodeError, OSError):
+                    doc = None
+                if isinstance(doc, dict):
+                    mcp_raw = doc
+            break   # declared is exclusive: escape/missing file -> no servers (omp behavior)
+    if not declared:
+        try:
+            with open(os.path.join(p, ".mcp.json")) as f:
+                doc = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            doc = None
+        if isinstance(doc, dict):
+            mcp_raw = doc
+    names = mcp_keys(mcp_raw) if mcp_raw else []
     seen, out = set(), []
-    for k in inv["mcp"]:
+    for k in names:
         if k not in seen:
             seen.add(k)
             out.append(k)
@@ -352,51 +416,57 @@ def cmd_plugin_list(_args):
 
 
 def cmd_plugin_toggle(args):
-    key, path = resolve(args.name)
-    name = key.split("@")[0]
-    inv = inventory(path, name)
-    skill_names, skill_ids, other_ids = plugin_items(inv, name)
+    targets = resolve_many(args.names)  # validated; exits on any bad name
     cfg = load_cfg()
-    counts = (f"{len(skill_names)} skill(s), {len(inv['commands'])} command(s), "
-              f"{len(inv['mcp'])} mcp, {len(inv['hooks'])} hook(s)")
+    lines, changed = [], False
+    for key, path in targets:
+        name = key.split("@")[0]
+        inv = inventory(path, name)
+        skill_names, skill_ids, other_ids = plugin_items(inv, name)
+        counts = (f"{len(skill_names)} skill(s), {len(inv['commands'])} command(s), "
+                  f"{len(inv['mcp'])} mcp, {len(inv['hooks'])} hook(s)")
 
-    if args.action == "disable":
+        if args.action == "disable":
+            legacy = pop_legacy_ignored(cfg, skill_names)
+            ext = cfg.setdefault("disabledExtensions", [])
+            added = [i for i in skill_ids + other_ids if i not in ext]
+            if not added and not legacy:
+                lines.append(f"{key}: already fully ignored in omp — nothing to change ({counts})")
+                continue
+            ext += added
+            changed = changed or bool(added) or bool(legacy)
+            note = " (migrated skills off legacy skills.ignoredSkills)" if legacy else ""
+            lines.append(f"{key}: disabled — added {len(added)} entries to disabledExtensions{note} "
+                         f"({counts} now ignored in omp)")
+            continue
+
+        # enable: also sweep ids written by omp-cc-user <= 0.1.0 (unprefixed
+        # slash-command:<cmd>, hook:<phase>:<base>:<base>)
+        legacy_ids = {f"slash-command:{c}" for c in inv["commands"]}
+        legacy_ids |= {f"hook:{ph}:{os.path.splitext(fn)[0]}:{os.path.splitext(fn)[0]}"
+                       for ph, fn in inv["hooks"]}
+        remove = set(skill_ids) | set(other_ids) | legacy_ids
+        ext = cfg.get("disabledExtensions") or []
+        kept = [e for e in ext if e not in remove]
+        removed_e = len(ext) - len(kept)
         legacy = pop_legacy_ignored(cfg, skill_names)
-        ext = cfg.setdefault("disabledExtensions", [])
-        added = [i for i in skill_ids + other_ids if i not in ext]
-        if not added and not legacy:
-            print(f"{key}: already fully ignored in omp — nothing to change ({counts})")
-            return
-        ext += added
+        if not removed_e and not legacy:
+            lines.append(f"{key}: already fully visible in omp — nothing to change ({counts})")
+            continue
+        if kept:
+            cfg["disabledExtensions"] = kept
+        else:
+            cfg.pop("disabledExtensions", None)
+        changed = changed or removed_e > 0 or bool(legacy)
+        note = " (plus legacy ignoredSkills entries)" if legacy else ""
+        lines.append(f"{key}: enabled — removed {removed_e} entries from disabledExtensions{note} "
+                     f"({counts} now visible in omp)")
+    if changed:
         save_cfg(cfg)
-        note = " (migrated skills off legacy skills.ignoredSkills)" if legacy else ""
-        print(f"{key}: disabled — added {len(added)} entries to disabledExtensions{note} "
-              f"({counts} now ignored in omp)")
+    for ln in lines:
+        print(ln)
+    if changed:
         print("run /reload-plugins (or restart omp) to apply")
-        return
-
-    # enable: also sweep ids written by omp-cc-user <= 0.1.0 (unprefixed
-    # slash-command:<cmd>, hook:<phase>:<base>:<base>)
-    legacy_ids = {f"slash-command:{c}" for c in inv["commands"]}
-    legacy_ids |= {f"hook:{ph}:{os.path.splitext(fn)[0]}:{os.path.splitext(fn)[0]}"
-                   for ph, fn in inv["hooks"]}
-    remove = set(skill_ids) | set(other_ids) | legacy_ids
-    ext = cfg.get("disabledExtensions") or []
-    kept = [e for e in ext if e not in remove]
-    removed_e = len(ext) - len(kept)
-    legacy = pop_legacy_ignored(cfg, skill_names)
-    if not removed_e and not legacy:
-        print(f"{key}: already fully visible in omp — nothing to change ({counts})")
-        return
-    if kept:
-        cfg["disabledExtensions"] = kept
-    else:
-        cfg.pop("disabledExtensions", None)
-    save_cfg(cfg)
-    note = " (plus legacy ignoredSkills entries)" if legacy else ""
-    print(f"{key}: enabled — removed {removed_e} entries from disabledExtensions{note} "
-          f"({counts} now visible in omp)")
-    print("run /reload-plugins (or restart omp) to apply")
 
 # --- command resource (~/.claude/commands) ---
 
@@ -443,14 +513,26 @@ def command_off(ids, disabled):
     )
 
 
-def find_command(name):
-    for ids, _path, _desc in discover_commands():
-        if name in ids:
-            return ids
-    avail = sorted(i for ids, _, _ in discover_commands() for i in ids)
-    print(f"error: command '{name}' not found in ~/.claude/commands")
-    print("available: " + ", ".join(avail))
-    sys.exit(1)
+def find_commands(patterns):
+    """[(pattern, ids)] — ids = union (ordered, deduped) of every command
+    file whose any id fnmatches the pattern. Unmatched pattern -> today's
+    error + available list, exit 1."""
+    cmds = discover_commands()
+    out = []
+    for pat in patterns:
+        ids = []
+        for cids, _p, _d in cmds:
+            if any(fnmatch.fnmatch(i, pat) for i in cids):
+                for i in cids:
+                    if i not in ids:
+                        ids.append(i)
+        if not ids:
+            avail = sorted(i for cids, _, _ in cmds for i in cids)
+            print(f"error: command '{pat}' not found in ~/.claude/commands")
+            print("available: " + ", ".join(avail))
+            sys.exit(1)
+        out.append((pat, ids))
+    return out
 
 
 def cmd_command_list(_args):
@@ -472,51 +554,198 @@ def cmd_command_list(_args):
 
 
 def cmd_command_disable(args):
-    ids = find_command(args.name)
+    targets = find_commands(args.names)
     cfg = load_cfg()
     ext = cfg.setdefault("disabledExtensions", [])
-    add = [f"slash-command:{i}" for i in ids if f"slash-command:{i}" not in ext]
-    if not add:
-        print(f"{args.name}: already ignored in omp — nothing to change")
-        return
-    ext += add
-    save_cfg(cfg)
-    print(f"{args.name}: disabled — added {', '.join(add)} to disabledExtensions")
-    print("run /reload-plugins (or restart omp) to apply")
+    lines, changed = [], False
+    for pat, ids in targets:
+        add = [f"slash-command:{i}" for i in ids if f"slash-command:{i}" not in ext]
+        if not add:
+            lines.append(f"{pat}: already ignored in omp — nothing to change")
+            continue
+        ext += add
+        changed = True
+        lines.append(f"{pat}: disabled — added {', '.join(add)} to disabledExtensions")
+    if changed:
+        save_cfg(cfg)
+    for ln in lines:
+        print(ln)
+    if changed:
+        print("run /reload-plugins (or restart omp) to apply")
 
 
 def cmd_command_enable(args):
-    ids = find_command(args.name)
+    targets = find_commands(args.names)
     cfg = load_cfg()
-    ext = cfg.get("disabledExtensions") or []
-    keys = {f"slash-command:{i}" for i in ids}
-    keep = [e for e in ext if e not in keys]
-    if len(keep) == len(ext):
-        print(f"{args.name}: already visible in omp — nothing to change")
+    lines, changed = [], False
+    for pat, ids in targets:
+        ext = cfg.get("disabledExtensions") or []
+        keys = {f"slash-command:{i}" for i in ids}
+        keep = [e for e in ext if e not in keys]
+        if len(keep) == len(ext):
+            lines.append(f"{pat}: already visible in omp — nothing to change")
+            continue
+        if keep:
+            cfg["disabledExtensions"] = keep
+        else:
+            cfg.pop("disabledExtensions", None)
+        changed = True
+        lines.append(f"{pat}: enabled — removed from disabledExtensions")
+    if changed:
+        save_cfg(cfg)
+    for ln in lines:
+        print(ln)
+    if changed:
+        print("run /reload-plugins (or restart omp) to apply")
+
+# --- mcp resource (user-level ~/.claude mcp config) ---
+
+CLAUDE_JSON = os.path.join(HOME, ".claude.json")
+CLAUDE_MCP_JSON = os.path.join(HOME, ".claude", "mcp.json")
+
+
+def discover_mcp():
+    """(name, cfg, src) for user-level Claude Code mcp servers.
+
+    Mirrors omp's claude provider: ~/.claude.json first; ~/.claude/mcp.json
+    only when the first yields no servers. Nested mcpServers shape only.
+    cfg is the server map value ({} when not a dict).
+    """
+    for path in (CLAUDE_JSON, CLAUDE_MCP_JSON):
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        servers = data.get("mcpServers") if isinstance(data, dict) else None
+        if not isinstance(servers, dict) or not servers:
+            continue
+        return [(n, c if isinstance(c, dict) else {}, os.path.basename(path))
+                for n, c in servers.items()]
+    return []
+
+
+def find_mcp(patterns):
+    """Ordered unique (name, cfg, src) for names/globs; unmatched -> exit 1."""
+    servers = discover_mcp()
+    by_name = {n: (c, s) for n, c, s in servers}
+    out = []
+    for pat in patterns:
+        hits = [n for n in by_name if fnmatch.fnmatch(n, pat)]
+        hits.sort()
+        if not hits:
+            print(f"error: mcp server '{pat}' not found in ~/.claude mcp config")
+            print("available: " + ", ".join(sorted(by_name)))
+            sys.exit(1)
+        for n in hits:
+            if n not in out:
+                out.append(n)
+    return [(n, *by_name[n]) for n in out]
+
+
+def mcp_detail(cfg):
+    url = cfg.get("url")
+    if isinstance(url, str) and url:
+        return url
+    cmd = cfg.get("command")
+    if isinstance(cmd, str) and cmd:
+        args = cfg.get("args")
+        if isinstance(args, list):
+            return cmd + " " + " ".join(str(a) for a in args)
+        return cmd
+    return None
+
+
+def cmd_mcp_list(_args):
+    cfg = load_cfg()
+    disabled = ext_ids(cfg)
+    servers = discover_mcp()
+    if not servers:
+        print("no mcp servers found in ~/.claude.json or ~/.claude/mcp.json")
         return
-    if keep:
-        cfg["disabledExtensions"] = keep
-    else:
-        cfg.pop("disabledExtensions", None)
-    save_cfg(cfg)
-    print(f"{args.name}: enabled — removed from disabledExtensions")
-    print("run /reload-plugins (or restart omp) to apply")
+    for name, entry, src in servers:
+        if f"mcp:{name}" in disabled:
+            state = "off"
+        elif entry.get("enabled") is False:
+            state = "off (enabled=false in Claude config)"
+        else:
+            state = "on"
+        print(f"{name}    omp: {state}    ({src})")
+        detail = mcp_detail(entry)
+        if detail:
+            print(f"  {detail}")
 
-USAGE = """usage: omp_cc_user.py <resource> <action> [name]
 
-  skill list               list ~/.claude/skills skills and their omp state
-  skill disable <name>     ignore a personal skill in omp
-  skill enable <name>      unignore a personal skill in omp
-  plugin list              list user plugins: resources, cc state, omp state
-  plugin disable <name>    ignore a plugin's resources in omp
-  plugin enable <name>     make a plugin's resources visible in omp
-  command list             list ~/.claude/commands commands and their omp state
-  command disable <name>   ignore a personal slash command in omp
-  command enable <name>    unignore a personal slash command in omp
+def cmd_mcp_disable(args):
+    targets = find_mcp(args.names)
+    cfg = load_cfg()
+    ext = cfg.setdefault("disabledExtensions", [])
+    lines, changed = [], False
+    for name, _entry, _src in targets:
+        if f"mcp:{name}" in ext:
+            lines.append(f"{name}: already ignored in omp — nothing to change")
+            continue
+        ext.append(f"mcp:{name}")
+        changed = True
+        lines.append(f"{name}: disabled — added mcp:{name} to disabledExtensions")
+    if changed:
+        save_cfg(cfg)
+    for ln in lines:
+        print(ln)
+    if changed:
+        print("run /reload-plugins (or restart omp) to apply")
 
-Resources: skill, plugin, command
+
+def cmd_mcp_enable(args):
+    targets = find_mcp(args.names)
+    cfg = load_cfg()
+    srcs = {n: (c, s) for n, c, s in discover_mcp()}
+    lines, changed = [], False
+    for name, entry, _src in targets:
+        ext = cfg.get("disabledExtensions") or []
+        key = f"mcp:{name}"
+        if key not in ext:
+            lines.append(f"{name}: already visible in omp — nothing to change")
+        else:
+            keep = [e for e in ext if e != key]
+            if keep:
+                cfg["disabledExtensions"] = keep
+            else:
+                cfg.pop("disabledExtensions", None)
+            changed = True
+            lines.append(f"{name}: enabled — removed mcp:{name} from disabledExtensions")
+        if entry.get("enabled") is False:
+            src = srcs.get(name, ({}, ""))[1]
+            lines.append(f"note: '{name}' has enabled=false in {src} — omp still skips it")
+    if changed:
+        save_cfg(cfg)
+    for ln in lines:
+        print(ln)
+    if changed:
+        print("run /reload-plugins (or restart omp) to apply")
+
+
+USAGE = """usage: omp_cc_user.py <resource> <action> [name...]
+
+  skill list                list ~/.claude/skills skills and their omp state
+  skill disable <name...>   ignore matching skill(s) in omp
+  skill enable <name...>    unignore matching skill(s) in omp
+  plugin list               list user plugins: resources, cc state, omp state
+  plugin disable <name...>  ignore matching plugins' resources in omp
+  plugin enable <name...>   make matching plugins' resources visible in omp
+  command list              list ~/.claude/commands commands and their omp state
+  command disable <name...> ignore matching slash command(s) in omp
+  command enable <name...>  unignore matching slash command(s) in omp
+  mcp list                  list ~/.claude mcp servers and their omp state
+  mcp disable <name...>     ignore matching mcp server(s) in omp
+  mcp enable <name...>      unignore matching mcp server(s) in omp
+
+Names: one or more, fnmatch globs (* ? [) allowed — quote them so the shell
+passes them through, e.g. plugin disable 'code-*'. Every name must match at
+least one item or nothing is written.
+
+Resources: skill, plugin, command, mcp
 Only edits ~/.omp/agent/config.yml; Claude Code™ is unaffected."""
-
 
 RESOURCES = {
     "skill": {
@@ -533,6 +762,11 @@ RESOURCES = {
         "list": cmd_command_list,
         "enable": cmd_command_enable,
         "disable": cmd_command_disable,
+    },
+    "mcp": {
+        "list": cmd_mcp_list,
+        "enable": cmd_mcp_enable,
+        "disable": cmd_mcp_disable,
     },
 }
 
@@ -555,9 +789,12 @@ def main():
     ap = argparse.ArgumentParser(add_help=False)
     ap.add_argument("resource")  # consumed
     ap.add_argument("action")    # consumed
-    ap.add_argument("name", nargs="?")
+    ap.add_argument("names", nargs="*")
     args = ap.parse_args(argv)
-    if argv[1] in ("enable", "disable") and not args.name:
+    if argv[1] == "list" and args.names:
+        print(USAGE)
+        sys.exit(2)
+    if argv[1] in ("enable", "disable") and not args.names:
         print(USAGE)
         sys.exit(2)
     action(args)

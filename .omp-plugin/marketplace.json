@@ -1,6 +1,8 @@
 {
   "name": "omp-extensions",
-  "owner": { "name": "mew" },
+  "owner": {
+    "name": "mew"
+  },
   "metadata": {
     "description": "Personal omp plugins: another-statusline, code-mode, omp-cc-user, omp-segments-to-widgets"
   },
@@ -23,8 +25,8 @@
     },
     {
       "name": "omp-cc-user",
-      "description": "Manage personal ~/.claude resources (skills, plugins, commands) and their omp visibility",
-      "version": "0.3.0",
+      "description": "Manage personal ~/.claude resources (skills, plugins, commands, mcp servers) and their omp visibility",
+      "version": "0.5.0",
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/omp-cc-user"
