@@ -1,9 +1,11 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { fileHyperlink, urlHyperlink } from "@oh-my-pi/pi-coding-agent/tui";
 
-import { allocate, displayWidth, truncate, type IconHolder, type Segment, type SegmentCtx, type SegmentView } from "./core";
+import { allocate, displayWidth, parseStatuslineConfig, resolveBounds, resolveSegments, truncate, type IconHolder, type Segment, type SegmentCtx, type SegmentView, type StatuslineConfig } from "./core";
 import { pathSegment } from "./segments/path";
 import { gitSegment } from "./segments/git";
 import { prSegment } from "./segments/pr";
@@ -15,11 +17,12 @@ import { stockSegment } from "./segments/stock";
  * below the editor. Replaces the built-in `path`, `git` and `pr` status-line
  * segments (remove those from `statusLine.leftSegments`).
  *
- * Layout: segments appear in SEGMENTS order (edit the list to reorder; the
- * rightmost entry shrinks first when the line is too wide). Two spaces
- * between segments. The line must fit one terminal row: segments shrink
- * rightmost first, down to their min width, then below min (floor 1), until
- * it fits.
+ * Layout: segment order and per-segment max/min widths are configurable via
+ * `$PI_CODING_AGENT_DIR/another-statusline.yml` (see README); without a
+ * config file the built-in defaults apply. The rightmost entry shrinks
+ * first when the line is too wide. Two spaces between segments. The line
+ * must fit one terminal row: segments shrink rightmost first, down to their
+ * min width, then below min (floor 1), until it fits.
  *
  * Hyperlinks: segments may return an href (file path or URL); index.ts wraps
  * the truncated text with the first-party fileHyperlink/urlHyperlink helpers
@@ -37,6 +40,13 @@ const SEPARATOR = "  ";
 // `Segment`, import it here, add it to this list. Order = display order;
 // the rightmost entry (list tail) is the first to shrink.
 const SEGMENTS: Segment[] = [pathSegment, gitSegment, prSegment, weatherSegment, stockSegment];
+
+// User config: segment order + per-segment max/min. Re-read on every refresh
+// so saving the file takes effect without a restart; missing file = defaults.
+const CONFIG_PATH = join(
+	process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".omp", "agent"),
+	"another-statusline.yml",
+);
 
 export default function anotherStatusline(pi: ExtensionAPI): void {
 	const fail = (ctx: ExtensionContext, err: unknown): void => {
@@ -78,6 +88,40 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 	let rerenderQueued = false;
 	let lastCtx: ExtensionContext | undefined;
 
+	let configWarned = false;
+	const logConfigError = (err: unknown, notify = true): void => {
+		const detail = err instanceof Error ? err.stack ?? err.message : String(err);
+		try {
+			appendFileSync(ERROR_LOG, `[${new Date().toISOString()}] config: ${detail}\n`);
+		} catch {
+			// logging must never throw
+		}
+		if (notify && !configWarned) {
+			configWarned = true;
+			const c = lastCtx;
+			if (c?.hasUI) {
+				try {
+					c.ui.notify(`another-statusline: config error (details: ${ERROR_LOG})`, "error");
+				} catch {
+					// notify must never throw
+				}
+			}
+		}
+	};
+
+	const loadConfig = (): StatuslineConfig | null => {
+		let text: string;
+		try {
+			text = readFileSync(CONFIG_PATH, "utf8");
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException).code !== "ENOENT") logConfigError(err);
+			return null;
+		}
+		const cfg = parseStatuslineConfig(text);
+		if (cfg === null) logConfigError(new Error(`invalid config: ${CONFIG_PATH}`));
+		return cfg;
+	};
+
 	// Re-renders the widget with the last context; no-op after shutdown.
 	const rerender = (): void => {
 		const c = lastCtx;
@@ -93,12 +137,17 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 		refreshing = true;
 		try {
 			const sctx: SegmentCtx = { cwd: ctx.cwd, theme: ctx.ui.theme as unknown as IconHolder, rerender };
-			const views = await Promise.all(SEGMENTS.map((s) => Promise.resolve(s.render(sctx))));
+			const cfg = loadConfig();
+			const ordered = resolveSegments(SEGMENTS, cfg);
+			for (const id of cfg?.segments ?? []) {
+				if (!ordered.some((s) => s.id === id)) logConfigError(new Error(`unknown segment id: ${id}`), false);
+			}
+			const views = await Promise.all(ordered.map((s) => Promise.resolve(s.render(sctx))));
 
 			const active: { seg: Segment; text: string; href: SegmentView["href"] }[] = [];
-			for (let i = 0; i < SEGMENTS.length; i++) {
+			for (let i = 0; i < ordered.length; i++) {
 				const v = views[i];
-				if (v) active.push({ seg: SEGMENTS[i], text: v.text, href: v.href });
+				if (v) active.push({ seg: ordered[i], text: v.text, href: v.href });
 			}
 			if (active.length === 0) {
 				clear(ctx);
@@ -107,7 +156,10 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 			const budget = (process.stdout.columns ?? 80) - (active.length - 1) * SEPARATOR.length;
 			const widths = allocate(
 				budget,
-				active.map((a) => ({ desired: Math.min(displayWidth(a.text), a.seg.max), min: a.seg.min })),
+				active.map((a) => {
+					const b = resolveBounds(a.seg, cfg?.segmentOptions?.[a.seg.id]);
+					return { desired: Math.min(displayWidth(a.text), b.max), min: b.min };
+				}),
 			);
 			const line = active
 				.map((a, i) => {

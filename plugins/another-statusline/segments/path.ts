@@ -68,7 +68,7 @@ function renderPath(cwd: string): { scratch: boolean; text: string } {
 
 export const pathSegment: Segment = {
 	id: "path",
-	max: 48,
+	max: 40,
 	min: 24,
 	keep: "tail",
 	render(ctx) {

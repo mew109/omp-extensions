@@ -48,6 +48,69 @@ export interface Segment {
 	start?(rerender: () => void): void;
 }
 
+// ------------------------------------------------------------- user config
+
+export interface SegmentOption {
+	max?: number;
+	min?: number;
+}
+
+export interface StatuslineConfig {
+	segments?: string[];
+	segmentOptions?: Record<string, SegmentOption>;
+}
+
+/** Parse config text (YAML; JSON is valid YAML). Non-object top level or parse failure -> null. */
+export function parseStatuslineConfig(text: string): StatuslineConfig | null {
+	if (typeof Bun === "undefined" || typeof Bun.YAML?.parse !== "function") return null;
+	let raw: unknown;
+	try {
+		raw = Bun.YAML.parse(text);
+	} catch {
+		return null;
+	}
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+	const cfg: StatuslineConfig = {};
+	const rec = raw as Record<string, unknown>;
+	if (Array.isArray(rec.segments) && rec.segments.every((s) => typeof s === "string")) {
+		cfg.segments = rec.segments as string[];
+	}
+	if (typeof rec.segmentOptions === "object" && rec.segmentOptions !== null) {
+		const opts: Record<string, SegmentOption> = {};
+		for (const [id, val] of Object.entries(rec.segmentOptions as Record<string, unknown>)) {
+			if (typeof val !== "object" || val === null) continue;
+			const o: SegmentOption = {};
+			const v = val as Record<string, unknown>;
+			if (typeof v.max === "number" && Number.isInteger(v.max) && v.max >= 1) o.max = v.max;
+			if (typeof v.min === "number" && Number.isInteger(v.min) && v.min >= 1) o.min = v.min;
+			opts[id] = o;
+		}
+		cfg.segmentOptions = opts;
+	}
+	return cfg;
+}
+
+/** Reorder/filter segments per cfg.segments; null/empty/invalid -> all in built-in order; unknown ids excluded. */
+export function resolveSegments(all: Segment[], cfg: StatuslineConfig | null): Segment[] {
+	const order = cfg?.segments;
+	if (!order || order.length === 0) return all;
+	const out: Segment[] = [];
+	for (const id of order) {
+		const seg = all.find((s) => s.id === id);
+		if (seg) out.push(seg);
+	}
+	return out;
+}
+
+/** Validated per-segment bounds; invalid fields ignored, min > max falls back to both built-ins. */
+export function resolveBounds(seg: Segment, opt: SegmentOption | undefined): { max: number; min: number } {
+	if (!opt) return { max: seg.max, min: seg.min };
+	const max = typeof opt.max === "number" ? opt.max : seg.max;
+	const min = typeof opt.min === "number" ? opt.min : seg.min;
+	if (min > max) return { max: seg.max, min: seg.min };
+	return { max, min };
+}
+
 // -------------------------------------------------------------- width logic
 
 /** True for codepoints that render two terminal cells (CJK, emoji, fullwidth). */
