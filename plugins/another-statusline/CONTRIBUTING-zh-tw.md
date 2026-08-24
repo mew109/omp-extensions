@@ -49,7 +49,7 @@ git / gh 查詢逾時預設 5000ms(`run` 的 `timeoutMs` 參數)。
 
     bun test plugins/another-statusline
 
-純邏輯均有測試(61 cases):core(寬度 / 截斷 / 分配器)、weather / git / pr / stock 各自的解析器與文字產生器。path 段依賴 `os.tmpdir()`、HOME 等環境,不測;fetch / timer 層不測(由 `bun test` 以外的整合 smoke 驗證)。測試檔不進 tsc(全域無 bun 型別),由 bun test 實跑涵蓋;typecheck:`bunx tsc --noEmit -p plugins/another-statusline`。
+純邏輯均有測試:core(寬度 / 截斷 / 分配器)、weather / git / pr / stock 各自的解析器與文字產生器。path 段依賴 `os.tmpdir()`、HOME 等環境,不測;fetch / timer 層不測(由 `bun test` 以外的整合 smoke 驗證)。測試檔不進 tsc(全域無 bun 型別),由 bun test 實跑涵蓋;typecheck:`bunx tsc --noEmit -p plugins/another-statusline`。
 
 ## 重繪時機
 

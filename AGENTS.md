@@ -20,13 +20,14 @@ A personal omp plugin marketplace (`omp-extensions`). Four plugins live under `p
 - Bump a plugin's version in BOTH `.omp-plugin/marketplace.json` and that plugin's `package.json`, keeping the two equal.
 - Users see a new version only after `omp plugin marketplace update omp-extensions` and `omp plugin upgrade <name>@omp-extensions`.
 - `@oh-my-pi/*` imports inside plugin code resolve from the installed plugin cache (the host rewrites them), not from this repo.
+- Dependencies are dev-only: a marketplace install is a plain directory copy (`fs.cp` in omp's `marketplace/cache.ts`), never a package install, and a git marketplace clone ships no `node_modules`. Runtime imports must be limited to Node/Bun builtins and `@oh-my-pi/*` (host-rewritten) — `dependencies` would never be installed, so never add that key; typecheck/test packages go in `devDependencies`. End users must never need anything beyond omp.
+- Keep each plugin's `bun.lock` tracked (CI installs with `--frozen-lockfile`); `node_modules/` stays ignored — the root `.gitignore` already covers it at any depth.
 
 ## Docs
 
 - Root README and the three doc'd plugins (another-statusline, code-mode, omp-cc-user): `README.md` / `CONTRIBUTING.md` English with a Chinese counterpart `README-zh-tw.md` / `CONTRIBUTING-zh-tw.md` (lowercase, uniform). omp-segments-to-widgets ships no README.
 - Every doc with a language pair (root README included) keeps the two versions in sync — edit both in one change.
 - No machine-local paths in any tracked file (docs, tsconfig, scripts — e.g. `/home/...`). Use the GitHub URL, a `<placeholder>`, or local devDependencies. For tsconfig this means resolving types via `node_modules`, never via absolute `typeRoots`/`paths`.
-- Numbers in docs rot: the test count in another-statusline's CONTRIBUTING must match `bun test` output.
 
 ## Verification
 

@@ -1,0 +1,44 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: install another-statusline deps
+        run: bun install --frozen-lockfile
+        working-directory: plugins/another-statusline
+      - name: install code-mode deps
+        run: bun install --frozen-lockfile
+        working-directory: plugins/code-mode
+      - name: test another-statusline
+        run: bun test plugins/another-statusline
+      - name: typecheck another-statusline
+        run: bunx tsc@7.0.2 --noEmit -p plugins/another-statusline
+      - name: typecheck code-mode
+        run: bunx tsc@7.0.2 --noEmit -p plugins/code-mode
+      - name: version parity (marketplace vs package.json)
+        run: |
+          bun -e '
+          const m = await Bun.file(".omp-plugin/marketplace.json").json();
+          let bad = 0;
+          for (const p of m.plugins) {
+            const pkg = await Bun.file(`plugins/${p.name}/package.json`).json();
+            if (pkg.version !== p.version) {
+              console.error(`${p.name}: marketplace ${p.version} != package.json ${pkg.version}`);
+              bad++;
+            }
+          }
+          if (bad) process.exit(1);
+          console.log(`version parity ok (${m.plugins.length} plugins)`);
+          '
+      - name: python syntax check omp-cc-user
+        run: python3 -m py_compile plugins/omp-cc-user/skills/omp-cc-user/scripts/omp_cc_user.py

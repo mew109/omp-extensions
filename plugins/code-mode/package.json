@@ -2,5 +2,8 @@
   "name": "code-mode",
   "version": "0.1.0",
   "private": true,
+  "devDependencies": {
+    "@oh-my-pi/pi-coding-agent": "18.0.4"
+  },
   "omp": { "extensions": ["./index.ts"] }
 }

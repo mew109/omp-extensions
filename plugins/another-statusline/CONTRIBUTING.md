@@ -50,7 +50,7 @@ git / gh queries time out at 5000 ms by default (the `timeoutMs` argument of `ru
 
     bun test plugins/another-statusline
 
-All pure logic is tested (61 cases): core (width / truncation / allocator) plus the parsers and text generators of weather / git / pr / stock. The path segment depends on `os.tmpdir()`, HOME, and similar environment state, so it is not tested; the fetch / timer layers are not tested either (covered by integration smoke outside `bun test`). Test files stay out of tsc (no bun types globally); bun test covers them by actually running. Typecheck: `bunx tsc --noEmit -p plugins/another-statusline`.
+All pure logic is tested: core (width / truncation / allocator) plus the parsers and text generators of weather / git / pr / stock. The path segment depends on `os.tmpdir()`, HOME, and similar environment state, so it is not tested; the fetch / timer layers are not tested either (covered by integration smoke outside `bun test`). Test files stay out of tsc (no bun types globally); bun test covers them by actually running. Typecheck: `bunx tsc --noEmit -p plugins/another-statusline`.
 
 ## Redraw triggers
 
