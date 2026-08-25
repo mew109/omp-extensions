@@ -53,7 +53,7 @@ git / gh 查詢逾時預設 5000ms(`run` 的 `timeoutMs` 參數)。
 
 ## 重繪時機
 
-事件驅動:`session_start` / `session_switch` / `turn_end` 各重繪一次(cwd 與 repo 狀態在 OMP 內就會變,事件已足夠)。weather / stock 另有各自的 unref'd timer(refresh 間隔),到期只重抓自己的資料,新資料落地才透過 rerender 重繪整行(git / pr 一併更新)——timer 不再無謂地重跑 git / gh。fetch 不阻塞渲染:widget 先畫(快取空時該段先隱藏),資料到位後即刻重繪補上;每次重繪從快取的時隙(天氣約 48 小時)選出「下個整點」,整點過後自動換下一段,不顯示過去時隙;fetch 失敗保留舊資料(無舊資料則隱藏該段),錯誤只寫 `ERROR_LOG` 不彈通知。
+事件驅動:`session_start` / `session_switch` / `turn_end` 各重繪一次(cwd 與 repo 狀態在 OMP 內就會變,事件已足夠)。另以 `process.stdout` 的 `"resize"` 監聽(去抖 300 ms)重繪,終端寬度變更時整行自動重排。weather / stock 另有各自的 unref'd timer(refresh 間隔),到期只重抓自己的資料,新資料落地才透過 rerender 重繪整行(git / pr 一併更新)——timer 不再無謂地重跑 git / gh。fetch 不阻塞渲染:widget 先畫(快取空時該段先隱藏),資料到位後即刻重繪補上;每次重繪從快取的時隙(天氣約 48 小時)選出「下個整點」,整點過後自動換下一段,不顯示過去時隙;fetch 失敗保留舊資料(無舊資料則隱藏該段),錯誤只寫 `ERROR_LOG` 不彈通知。
 
 ## 未複製的內建行為
 

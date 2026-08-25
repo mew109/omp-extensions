@@ -113,44 +113,36 @@ export function resolveBounds(seg: Segment, opt: SegmentOption | undefined): { m
 
 // -------------------------------------------------------------- width logic
 
-/** True for codepoints that render two terminal cells (CJK, emoji, fullwidth). */
-function isWide(cp: number): boolean {
-	return (
-		(cp >= 0x1100 && cp <= 0x115f) ||
-		(cp >= 0x2e80 && cp <= 0x303e) ||
-		(cp >= 0x3041 && cp <= 0x33ff) ||
-		(cp >= 0x3400 && cp <= 0x4dbf) ||
-		(cp >= 0x4e00 && cp <= 0xa4cf) ||
-		(cp >= 0xac00 && cp <= 0xd7a3) ||
-		(cp >= 0xf900 && cp <= 0xfaff) ||
-		(cp >= 0xfe30 && cp <= 0xfe4f) ||
-		(cp >= 0xff00 && cp <= 0xff60) ||
-		(cp >= 0x1f000 && cp <= 0x1fbff)
-	);
+// Measure per grapheme cluster, not code point: an emoji base alone is 1
+// cell but emoji+VS16 as one cluster is 2 (🌦 = 1, 🌦️ = 2), so per-code-point
+// summing undercounts. Bun.stringWidth is the same engine the host renderer
+// wraps with; pi-tui expands a tab to 3 cells.
+const STRING_WIDTH_OPTS = { countAnsiEscapeCodes: false, ambiguousIsNarrow: true } as const;
+const TAB_CELLS = 3;
+const CLUSTERS = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** Visible cell width of one grapheme cluster (same engine the widget renderer wraps with). */
+function cellWidth(cluster: string): number {
+	return cluster === "\t" ? TAB_CELLS : Bun.stringWidth(cluster, STRING_WIDTH_OPTS);
 }
 
-/** Visible cell width of one character (wide/emoji codepoints count 2). */
-function cellWidth(ch: string): number {
-	return isWide(ch.codePointAt(0)!) ? 2 : 1;
-}
-
-/** Visible cell width of `text` (wide/emoji codepoints count 2, others 1). */
+/** Visible cell width of `text`, summed per grapheme cluster. */
 export function displayWidth(text: string): number {
 	let w = 0;
-	for (const ch of text) w += cellWidth(ch);
+	for (const s of CLUSTERS.segment(text)) w += cellWidth(s.segment);
 	return w;
 }
 
 /** Truncate to `width` cells keeping the rightmost part (path policy). */
 export function truncateRight(text: string, width: number): string {
 	if (displayWidth(text) <= width) return text;
-	const chars = [...text];
+	const cs = [...CLUSTERS.segment(text)].map((s) => s.segment);
 	let tail = "";
 	let used = 0;
-	for (let i = chars.length - 1; i >= 0 && used < width - 1; i--) {
-		const cw = cellWidth(chars[i]);
+	for (let i = cs.length - 1; i >= 0 && used < width - 1; i--) {
+		const cw = cellWidth(cs[i]);
 		if (used + cw > width - 1) break;
-		tail = chars[i] + tail;
+		tail = cs[i] + tail;
 		used += cw;
 	}
 	return `…${tail}`;
@@ -159,12 +151,13 @@ export function truncateRight(text: string, width: number): string {
 /** Truncate to `width` cells keeping the leftmost part (git/pr policy). */
 export function truncateLeft(text: string, width: number): string {
 	if (displayWidth(text) <= width) return text;
+	const cs = [...CLUSTERS.segment(text)].map((s) => s.segment);
 	let head = "";
 	let used = 0;
-	for (const ch of text) {
-		const cw = cellWidth(ch);
+	for (const c of cs) {
+		const cw = cellWidth(c);
 		if (used + cw > width - 1) break;
-		head += ch;
+		head += c;
 		used += cw;
 	}
 	return `${head}…`;
@@ -201,6 +194,26 @@ export function allocate(budget: number, segs: SegBudget[]): number[] {
 		}
 	}
 	return w;
+}
+
+/** omp renders each setWidget line as Text(line, 1, 0): 1 padding cell per side.
+ * tui.tight removes it; budget for the default so the line never wraps. */
+export const WIDGET_HPAD = 2;
+
+export interface LineSeg {
+	text: string;
+	keep: "head" | "tail";
+	max: number;
+	min: number;
+}
+
+/** Truncate segments to fit one widget line inside `termWidth` cells
+ * (separators included): budget = termWidth - WIDGET_HPAD - separators,
+ * shrink rightmost first via allocate. Returns the truncated per-segment texts. */
+export function buildStatusLine(segs: LineSeg[], termWidth: number, separator = "  "): string[] {
+	const budget = termWidth - WIDGET_HPAD - (segs.length - 1) * separator.length;
+	const widths = allocate(budget, segs.map((s) => ({ desired: Math.min(displayWidth(s.text), s.max), min: s.min })));
+	return segs.map((s, i) => truncate(s.text, s.keep, widths[i]));
 }
 
 // ------------------------------------------------------------------ runners
