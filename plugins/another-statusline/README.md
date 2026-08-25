@@ -38,6 +38,8 @@ A segment hides when its data is missing (not a git repo, no PR, no weather, no 
 
 The whole line must fit one row. When too wide, segments shrink from the rightmost (`SEGMENTS` tail): first down to each segment's min, then below min (floor 1), moving left until the line fits. Cell budgets per segment (max / min live in each segment file):
 
+The width budget reserves 2 cells for the widget's own per-line padding — omp renders each `setWidget` line inside `Text(line, 1, 0)`, so the content area is `columns − 2` (`tui.tight` removes the padding; those users simply get 2 spare cells). Widths are measured per grapheme cluster with `Bun.stringWidth`, the same engine the renderer wraps with: emoji + VS16 = 2 cells, `⛅`/`➖` = 2, tab = 3. This fixes undercounts that could wrap the line onto a second row on narrow terminals.
+
     path     max 48  min 24   (segments/path.ts, keeps the tail)
     git      max 36  min 20   (segments/git.ts)
     pr       max 30  min 10   (segments/pr.ts)
@@ -72,7 +74,7 @@ Semantics:
 
 - `segments`: **replaces the whole list** — only the listed ids show, in the given order; unlisted ids hide (this is how you turn a segment off); unknown ids are ignored and logged; an empty array or a missing `segments` falls back to the built-in default list. The ids are the five segments from "Display": `path` / `git` / `pr` / `weather` / `stock`.
 - `segmentOptions.<id>.max` / `min`: positive integers (≥1) with min ≤ max after the merge; an invalid single field is dropped and the built-in value applies; min > max drops both fields for that segment. Keys without a matching segment are ignored.
-- **Saving applies immediately**: every redraw (session_start / session_switch / turn_end / background data landing) re-reads the file; no restart.
+- **Saving applies immediately**: every redraw (session_start / session_switch / turn_end / terminal resize / background data landing) re-reads the file; no restart.
 - Missing file → defaults, silently. Read failure (other than missing) or parse failure → defaults + one line in `/tmp/another-statusline-errors.log` + one error notification per process.
 - The weather / stock background pollers ignore the `segments` filter: all of them stay started, so data stays cached and re-enabling is instant.
 

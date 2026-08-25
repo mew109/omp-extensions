@@ -42,6 +42,7 @@ A personal omp plugin marketplace (`omp-extensions`). Four plugins live under `p
 
 ## Known traps (another-statusline)
 
+- Widget string lines render inside `Text(line, 1, 0)` (content width `columns − 2`; `tui.tight` removes it), so width math must budget `WIDGET_HPAD` and measure with the host engine (`Bun.stringWidth` per grapheme cluster).
 - OSC 8 hyperlinks never emit under the current omp layout: the extension's `config/settings` instance is not the one the host initializes, so `isHyperlinkEnabled()` stays false. Measured 2026-08-22 on omp v17.4.2; documented in the README. Do not try to fix this without re-testing on a newer omp.
 - `WEATHER_LOCATION`, `STOCK_INDEX`, and the other constants are personal defaults — describe them, don't change them.
 - The weather "next full hour" is computed in local time while the API returns the location's timezone; when they differ, the wrong slot gets picked. Keep this in mind when touching `segments/weather.ts`.

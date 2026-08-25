@@ -37,6 +37,8 @@
 
 整行必須塞進一列:超寬時從最右段(`SEGMENTS` 尾端)開始縮,先縮到該段 min,再低於 min(下限 1)繼續往右縮,直到放得下。各段 cell 預算(max / min 定義在各 segment 檔):
 
+寬度預算保留 2 cells 給 widget 每行自身的 padding——omp 把每行 `setWidget` 內容包在 `Text(line, 1, 0)` 裡,內容區為 `columns − 2`(`tui.tight` 會拿掉 padding,該設定下只是多出 2 cells 餘裕)。寬度以 grapheme cluster 為單位、用 `Bun.stringWidth` 計算——與 renderer 換行的引擎相同:emoji + VS16 = 2 cells、`⛅`/`➖` = 2、tab = 3。此修正解決低估寬度導致窄終端上整行換到第二列的問題。
+
     path     max 40  min 24   (segments/path.ts,保留右側)
     git      max 36  min 20   (segments/git.ts)
     pr       max 30  min 10   (segments/pr.ts)
@@ -71,7 +73,7 @@ YAML(JSON 亦合法),schema 模仿 omp 內建 `statusLine`:
 
 - `segments`:**整份取代** —— 列出的才顯示、順序照列表;不列出的即隱藏(這就是關閉某段的方法);未知 id 忽略並記 log;空陣列或缺 `segments` → 內建預設全列表。id 即「顯示」一節的五段:`path` / `git` / `pr` / `weather` / `stock`。
 - `segmentOptions.<id>.max` / `min`:正整數(≥1),合併後需 min ≤ max;單一欄位無效則忽略該欄位用內建值;min > max 則該段 max / min 全用內建值。無對應 segment 的 key 忽略。
-- **存檔即生效**:每次重繪(session_start / session_switch / turn_end / 背景資料落地)重新讀檔,不用重啟。
+- **存檔即生效**:每次重繪(session_start / session_switch / turn_end / 終端寬度變更 / 背景資料落地)重新讀檔,不用重啟。
 - 檔案不存在 → 靜默用預設。讀取失敗(非不存在)或解析失敗 → 用預設 + 記 `/tmp/another-statusline-errors.log` + 每進程一次錯誤通知。
 - 天氣 / 股票的背景輪詢不受 `segments` 過濾影響:維持全部啟動(資料保溫,重新啟用零延遲)。
 

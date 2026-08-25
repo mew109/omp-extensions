@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { fileHyperlink, urlHyperlink } from "@oh-my-pi/pi-coding-agent/tui";
 
-import { allocate, displayWidth, parseStatuslineConfig, resolveBounds, resolveSegments, truncate, type IconHolder, type Segment, type SegmentCtx, type SegmentView, type StatuslineConfig } from "./core";
+import { buildStatusLine, parseStatuslineConfig, resolveBounds, resolveSegments, type IconHolder, type Segment, type SegmentCtx, type SegmentView, type StatuslineConfig } from "./core";
 import { pathSegment } from "./segments/path";
 import { gitSegment } from "./segments/git";
 import { prSegment } from "./segments/pr";
@@ -22,7 +22,8 @@ import { stockSegment } from "./segments/stock";
  * config file the built-in defaults apply. The rightmost entry shrinks
  * first when the line is too wide. Two spaces between segments. The line
  * must fit one terminal row: segments shrink rightmost first, down to their
- * min width, then below min (floor 1), until it fits.
+ * min width, then below min (floor 1), until it fits. The budget reserves
+ * 2 cells for omp's per-line widget padding (WIDGET_HPAD).
  *
  * Hyperlinks: segments may return an href (file path or URL); index.ts wraps
  * the truncated text with the first-party fileHyperlink/urlHyperlink helpers
@@ -35,6 +36,7 @@ import { stockSegment } from "./segments/stock";
 const WIDGET_KEY = "another-statusline";
 const ERROR_LOG = "/tmp/another-statusline-errors.log";
 const SEPARATOR = "  ";
+const RESIZE_DEBOUNCE_MS = 300;
 
 // Segment registry. Add a segment: drop segments/<id>.ts exporting a
 // `Segment`, import it here, add it to this list. Order = display order;
@@ -153,20 +155,21 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 				clear(ctx);
 				return;
 			}
-			const budget = (process.stdout.columns ?? 80) - (active.length - 1) * SEPARATOR.length;
-			const widths = allocate(
-				budget,
+			const termWidth = process.stdout.columns || Number(process.env.COLUMNS) || 80; // mirrors pi-tui terminal.columns
+			const parts = buildStatusLine(
 				active.map((a) => {
 					const b = resolveBounds(a.seg, cfg?.segmentOptions?.[a.seg.id]);
-					return { desired: Math.min(displayWidth(a.text), b.max), min: b.min };
+					return { text: a.text, keep: a.seg.keep ?? "head", max: b.max, min: b.min };
 				}),
+				termWidth,
+				SEPARATOR,
 			);
-			const line = active
-				.map((a, i) => {
-					const t = truncate(a.text, a.seg.keep ?? "head", widths[i]);
+			const line = parts
+				.map((t, i) => {
 					// Wrap after truncation: width allocation must see plain text only.
-					if (!a.href) return t;
-					return a.href.kind === "file" ? fileHyperlink(a.href.target, t) : urlHyperlink(a.href.target, t);
+					const href = active[i].href;
+					if (!href) return t;
+					return href.kind === "file" ? fileHyperlink(href.target, t) : urlHyperlink(href.target, t);
 				})
 				.join(SEPARATOR);
 			ctx.ui.setWidget(WIDGET_KEY, [line], { placement: "belowEditor" });
@@ -189,6 +192,18 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 	// Background segments (weather, stock) start their unref'd timers; their
 	// rerender re-renders the widget when fresh data lands.
 	for (const s of SEGMENTS) s.start?.(rerender);
+
+	// omp repaints widget lines at the new width but never re-runs this
+	// extension, so the line would stay sized for the old width until the
+	// next event. SIGWINCH arrives in bursts while dragging; one trailing
+	// rerender after the burst settles is enough (refresh() re-reads
+	// stdout.columns, which is updated before the event fires).
+	let resizeTimer: NodeJS.Timeout | undefined;
+	process.stdout.on("resize", () => {
+		clearTimeout(resizeTimer);
+		resizeTimer = setTimeout(rerender, RESIZE_DEBOUNCE_MS);
+		resizeTimer.unref();
+	});
 
 	// cwd and repo state change inside OMP (startup, session switch, a turn
 	// running shell commands), so event refreshes suffice; timed segments

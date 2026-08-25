@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { allocate, displayWidth, parseStatuslineConfig, resolveBounds, resolveSegments, truncate, truncateLeft, truncateRight, type Segment } from "./core";
+import { allocate, buildStatusLine, displayWidth, parseStatuslineConfig, resolveBounds, resolveSegments, truncate, truncateLeft, truncateRight, type LineSeg, type Segment } from "./core";
 
 const seg = (id: string): Segment => ({ id, max: 30, min: 8, render: () => null });
 const all = ["path", "git", "pr"].map(seg);
@@ -11,12 +11,17 @@ describe("displayWidth", () => {
 	test("CJK chars are 2 cells", () => {
 		expect(displayWidth("陣雨")).toBe(4);
 	});
-	test("emoji counts 2 cells plus 1 for the variation selector", () => {
-		// U+1F326 + FE0F: the allocator's currency counts the selector too.
-		expect(displayWidth("🌦️")).toBe(3);
+	test("emoji+VS16 as one cluster counts 2 cells", () => {
+		expect(displayWidth("🌦️")).toBe(2);
 	});
-	test("mixed text sums per character", () => {
-		expect(displayWidth("🌦️ showers")).toBe(11);
+	test("mixed text sums per cluster", () => {
+		expect(displayWidth("🌦️ showers")).toBe(10);
+	});
+	test("⛅ counts 2 cells (U+26C5 undercount regression)", () => {
+		expect(displayWidth("⛅ 局部多雲 26°C 85%")).toBe(20);
+	});
+	test("a tab counts 3 cells", () => {
+		expect(displayWidth("a\tb")).toBe(5);
 	});
 });
 
@@ -37,6 +42,31 @@ describe("truncation", () => {
 	test("policy helper picks the kept side", () => {
 		expect(truncate("abcdefghij", "head", 5)).toBe("abcd…");
 		expect(truncate("abcdefghij", "tail", 5)).toBe("…ghij");
+	});
+	test("truncateLeft on 2-cell emoji never splits a cluster", () => {
+		expect(truncateLeft("⛅⛅⛅", 5)).toBe("⛅⛅…");
+	});
+});
+
+describe("buildStatusLine", () => {
+	const segs: LineSeg[] = [
+		{ text: "▸ ~/src/omp-extensions", keep: "tail", max: 40, min: 24 },
+		{ text: "⑂ feature/statusline-width", keep: "head", max: 36, min: 20 },
+		{ text: "⤴ #123", keep: "head", max: 30, min: 10 },
+		{ text: "⛅ 局部多雲 26°C 85%", keep: "head", max: 39, min: 20 },
+		{ text: "📈 TAIEX 22,650.12 ▲ +112.34 +0.50%", keep: "head", max: 38, min: 20 },
+	];
+	test("60-col terminal: joined width fits the 58-cell content area", () => {
+		const parts = buildStatusLine(segs, 60);
+		expect(displayWidth(parts.join("  "))).toBeLessThanOrEqual(58);
+	});
+	test("30-col terminal: still one row", () => {
+		const parts = buildStatusLine(segs, 30);
+		expect(displayWidth(parts.join("  "))).toBeLessThanOrEqual(28);
+	});
+	test("wide terminal: no truncation", () => {
+		const parts = buildStatusLine(segs, 200);
+		expect(parts).toEqual(segs.map((s) => s.text));
 	});
 });
 
