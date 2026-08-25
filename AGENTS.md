@@ -37,7 +37,7 @@ A personal omp plugin marketplace (`omp-extensions`). Four plugins live under `p
 ## Git
 
 - Stage explicit paths only — never `git add -A` / `git add .`.
-- Commit subject: no prefix, short, lowercase (read `git log` first). Body states why, not what.
+- Commit subject: Conventional Commits (`feat:` / `fix:` / `chore:` / `docs:` / `refactor:` …), short, lowercase. Body states why, not what.
 - Push only when asked.
 
 ## Known traps (another-statusline)
