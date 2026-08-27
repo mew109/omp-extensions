@@ -118,7 +118,7 @@ export default function dumpAsCurlExtension(pi: ExtensionAPI) {
 					report(ctx, `dump-as-curl: --filename points at a directory: ${out}`, "warning");
 					return;
 				}
-				await Bun.write(out, renderCurlScript(c, parsed.index, ring.length));
+				await Bun.write(out, renderCurlScript(c, parsed.index, ring.length, parsed.redact));
 				chmodSync(out, 0o700);
 			} catch (e) {
 				const message = e instanceof Error ? e.message : String(e);

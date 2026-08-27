@@ -22,7 +22,8 @@ Two source files. User-facing docs (install, flags, limitations) are in
   `Capture` (`makeCapture`) and lands in an 8-slot ring (`pushCapture`).
 - Command: `/dump-as-curl` (`registerCommand`) parses args (`parseArgs`),
   picks a capture (`pickCapture`, 1 = newest), renders the script
-  (`renderCurlScript`) and writes it (`resolveOutPath` → `Bun.write` →
+  (`renderCurlScript`; 4th param `redactAuth` defaults true — `--no-redact`
+  keeps the Bearer token) and writes it (`resolveOutPath` → `Bun.write` →
   `chmodSync` 0700).
 - Output: `ctx.ui.notify` in the TUI (same surface `/dump` uses);
   `process.stdout` when `hasUI` is false.

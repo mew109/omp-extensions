@@ -23,6 +23,7 @@ endpoints and remote providers alike.
 |---|---|
 | `--index N` | which capture to dump: 1 = newest (default 1; the last 8 are kept) |
 | `--filename FILE` | output file: a bare name goes to the OS tmp dir; a path with `/` resolves against the cwd |
+| `--no-redact` | keep the original Authorization: Bearer token (default: replaced with `Bearer <REDACTED>`) |
 | `--help` | show help |
 
 Examples:
@@ -53,6 +54,9 @@ Endpoint patterns:
 
 ## Security
 
+By default the dumped script replaces the Authorization: Bearer token with
+`Bearer <REDACTED>` — the redacted file is for reading, not replaying; pass
+`--no-redact` to get a replayable script.
 The script contains Authorization headers and the raw conversation
 context, so treat the file like an API key: keep mode 0700, replay it,
 then delete it. The ring lives in memory for the process lifetime.
