@@ -25,6 +25,13 @@ jobs:
         run: bunx tsc@7.0.2 --noEmit -p plugins/another-statusline
       - name: typecheck code-mode
         run: bunx tsc@7.0.2 --noEmit -p plugins/code-mode
+      - name: install dump-as-curl deps
+        run: bun install --frozen-lockfile
+        working-directory: plugins/dump-as-curl
+      - name: test dump-as-curl
+        run: bun test plugins/dump-as-curl
+      - name: typecheck dump-as-curl
+        run: bunx tsc@7.0.2 --noEmit -p plugins/dump-as-curl
       - name: version parity (marketplace vs package.json)
         run: |
           bun -e '

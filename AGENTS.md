@@ -4,10 +4,11 @@ Rules for coding agents working in this repo.
 
 ## What this repo is
 
-A personal omp plugin marketplace (`omp-extensions`). Four plugins live under `plugins/`:
+A personal omp plugin marketplace (`omp-extensions`). Five plugins live under `plugins/`:
 
 - **another-statusline** (extension): statusline widget — path/git/pr merged into one segment row, plus weather and stock. TypeScript, tested with `bun test`.
 - **code-mode** (extension): PTC-style code mode (tool set limited to eval/ask/read/write).
+- **dump-as-curl** (extension): `/dump-as-curl [--index N] [--filename FILE] [--help]` writes a captured LLM request (in-process `globalThis.fetch` interception) as an executable curl script.
 - **omp-cc-user** (skill + slash command): manages which `~/.claude` resources are visible in omp.
 - **omp-segments-to-widgets** (skill): procedure for turning statusline segments into widgets.
 

@@ -4,7 +4,7 @@
     "name": "mew"
   },
   "metadata": {
-    "description": "Personal omp plugins: another-statusline, code-mode, omp-cc-user, omp-segments-to-widgets"
+    "description": "Personal omp plugins: another-statusline, code-mode, dump-as-curl, omp-cc-user, omp-segments-to-widgets"
   },
   "plugins": [
     {
@@ -22,6 +22,14 @@
       "category": "development",
       "license": "MIT",
       "source": "./plugins/code-mode"
+    },
+    {
+      "name": "dump-as-curl",
+      "description": "Dump the last LLM request as an executable curl script (/dump-as-curl)",
+      "version": "0.1.0",
+      "category": "development",
+      "license": "MIT",
+      "source": "./plugins/dump-as-curl"
     },
     {
       "name": "omp-cc-user",
