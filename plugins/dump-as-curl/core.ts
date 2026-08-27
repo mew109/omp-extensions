@@ -28,6 +28,8 @@ export interface DumpAsCurlArgs {
 	/** Raw --filename value, unresolved. */
 	filename?: string;
 	help: boolean;
+	/** false = --no-redact keeps the Authorization: Bearer token. */
+	redact: boolean;
 	/** Human-readable parse error. */
 	error?: string;
 }
@@ -62,7 +64,8 @@ export function parseArgs(args: string): DumpAsCurlArgs {
 	const tokens = tokenize(args);
 	let index = 1;
 	let filename: string | undefined;
-	const err = (error: string): DumpAsCurlArgs => ({ index: 1, help: false, error });
+	let redact = true;
+	const err = (error: string): DumpAsCurlArgs => ({ index: 1, help: false, redact: true, error });
 	let i = 0;
 	while (i < tokens.length) {
 		const tok = tokens[i++];
@@ -70,7 +73,7 @@ export function parseArgs(args: string): DumpAsCurlArgs {
 		const name = eq === -1 ? tok : tok.slice(0, eq);
 		const inline = eq === -1 ? undefined : tok.slice(eq + 1);
 		if (name === "--help" || name === "-h") {
-			return { index: 1, help: true };
+			return { index: 1, help: true, redact: true };
 		}
 		if (name === "--index" || name === "-i") {
 			const v = inline !== undefined ? inline : tokens[i++];
@@ -84,13 +87,15 @@ export function parseArgs(args: string): DumpAsCurlArgs {
 				return err("--filename expects a file name");
 			}
 			filename = v;
+		} else if (name === "--no-redact") {
+			redact = false;
 		} else if (name.startsWith("-")) {
 			return err(`unknown option: ${name}`);
 		} else {
 			return err(`unexpected argument: ${tok} (options start with --)`);
 		}
 	}
-	return { index, filename, help: false };
+	return { index, filename, help: false, redact };
 }
 
 export function usageText(): string {
@@ -103,6 +108,8 @@ export function usageText(): string {
 		"  --index N        which capture to dump: 1 = newest (default 1; 8 kept)",
 		'  --filename FILE  output file: bare name -> OS tmp dir; a path with "/"',
 		"                   resolves against the cwd",
+		"  --no-redact      keep the original Authorization: Bearer token",
+		"                   (default: replaced with Bearer <REDACTED>)",
 		"  --help           show this help",
 	].join("\n");
 }
@@ -193,7 +200,7 @@ export function shellQuote(s: string): string {
 	return "'" + s.replace(/'/g, "'\\''") + "'";
 }
 
-export function renderCurlScript(c: Capture, index: number, total: number): string {
+export function renderCurlScript(c: Capture, index: number, total: number, redactAuth = true): string {
 	const delim = `omp_dump_as_curl_EOF_${c.ts.toString(36)}`;
 	const lines: string[] = [
 		"#!/bin/sh",
@@ -206,7 +213,11 @@ export function renderCurlScript(c: Capture, index: number, total: number): stri
 	];
 	for (const [name, value] of c.headers) {
 		if (SKIPPED_HEADERS[name.toLowerCase()]) continue;
-		lines.push(`  -H ${shellQuote(`${name}: ${value}`)} \\`);
+		const shown =
+			redactAuth && name.toLowerCase() === "authorization" && /^bearer\s+\S+/i.test(value)
+				? "Bearer <REDACTED>"
+				: value;
+		lines.push(`  -H ${shellQuote(`${name}: ${shown}`)} \\`);
 	}
 	if (c.bodyOmitted) {
 		lines.push("  # body omitted (>16 MiB or non-text body); attach it manually");

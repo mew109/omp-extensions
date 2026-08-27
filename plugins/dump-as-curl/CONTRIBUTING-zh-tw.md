@@ -20,7 +20,8 @@
   一次 `globalThis.fetch`。URL 符合 `isLlmEndpoint` 的 POST 經
   `makeCapture` 變成 `Capture`,放進保留 8 筆的 ring(`pushCapture`)。
 - Command:`/dump-as-curl`(`registerCommand`)解析參數(`parseArgs`)、
-  選出擷取(`pickCapture`,1 = 最新)、生成 script(`renderCurlScript`)
+  選出擷取(`pickCapture`,1 = 最新)、生成 script(`renderCurlScript`;
+  第四個參數 `redactAuth` 預設 true——`--no-redact` 保留 Bearer token)
   後寫檔(`resolveOutPath` → `Bun.write` → `chmodSync` 0700)。
 - 輸出:TUI 用 `ctx.ui.notify`(與 `/dump` 同一顯示面);`hasUI` 為
   false 時寫 `process.stdout`。

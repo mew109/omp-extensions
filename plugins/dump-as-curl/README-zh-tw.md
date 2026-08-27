@@ -21,6 +21,7 @@
 |---|---|
 | `--index N` | 要 dump 第幾筆擷取:1 = 最新(預設 1;保留最後 8 筆) |
 | `--filename FILE` | 輸出檔:純檔名放 OS tmp 目錄;含 `/` 的路徑以 cwd 解析 |
+| `--no-redact` | 保留原始的 Authorization: Bearer token(預設換成 `Bearer <REDACTED>`) |
 | `--help` | 顯示說明 |
 
 範例:
@@ -50,6 +51,9 @@ ring,單一 body 上限 16 MiB。端點模式:
 
 ## 安全
 
+預設會把 dump 出來的 script 裡的 Authorization: Bearer token 換成
+`Bearer <REDACTED>`——redacted 檔用來看、不能用來重放;要重放請加
+`--no-redact`。
 script 內含 Authorization headers 與原始對話 context,請把檔案當 API
 key 對待:維持 0700、重放完就刪除。ring 僅存於記憶體,存活整個行程。
 

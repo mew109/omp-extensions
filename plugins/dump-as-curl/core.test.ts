@@ -38,7 +38,7 @@ function markerCapture(n: number): Capture {
 
 describe("parseArgs", () => {
 	test("empty args default to newest", () => {
-		expect(parseArgs("")).toEqual({ index: 1, help: false });
+		expect(parseArgs("")).toEqual({ index: 1, help: false, redact: true });
 	});
 	test("--index N and --index=N", () => {
 		expect(parseArgs("--index 3").index).toBe(3);
@@ -80,11 +80,24 @@ describe("parseArgs", () => {
 		expect(parseArgs("--index 1 --index 2").index).toBe(2);
 		expect(parseArgs("--index 1 --index 2").error).toBeUndefined();
 	});
+	test("--no-redact disables redaction", () => {
+		const parsed = parseArgs("--no-redact");
+		expect(parsed.redact).toBe(false);
+		expect(parsed.error).toBeUndefined();
+	});
+	test("--no-redact combines with other flags", () => {
+		const parsed = parseArgs("--no-redact --index 2");
+		expect(parsed.redact).toBe(false);
+		expect(parsed.index).toBe(2);
+	});
 });
 
 describe("usageText", () => {
 	test("starts with usage line", () => {
 		expect(usageText().startsWith("Usage: /dump-as-curl")).toBe(true);
+	});
+	test("documents --no-redact", () => {
+		expect(usageText()).toContain("--no-redact");
 	});
 });
 
@@ -254,6 +267,25 @@ describe("renderCurlScript", () => {
 		const script = renderCurlScript(captureOf({ body: "" }), 1, 1);
 		expect(script).not.toContain("--data-binary");
 		expect(script).not.toContain("body omitted");
+	});
+	test("redacts bearer token by default", () => {
+		const c = captureOf({ headers: [["authorization", "Bearer sk-secret-123"]] });
+		const script = renderCurlScript(c, 1, 1);
+		expect(script).toContain("-H 'authorization: Bearer <REDACTED>' \\");
+		expect(script).not.toContain("sk-secret-123");
+	});
+	test("--no-redact keeps the original bearer token", () => {
+		const c = captureOf({ headers: [["authorization", "Bearer sk-secret-123"]] });
+		const script = renderCurlScript(c, 1, 1, false);
+		expect(script).toContain("Bearer sk-secret-123");
+	});
+	test("non-bearer authorization stays verbatim", () => {
+		const c = captureOf({ headers: [["authorization", "Basic dXNlcjpwYXNz"]] });
+		expect(renderCurlScript(c, 1, 1)).toContain("Basic dXNlcjpwYXNz");
+	});
+	test("lowercase bearer scheme is redacted", () => {
+		const c = captureOf({ headers: [["authorization", "bearer sk-x"]] });
+		expect(renderCurlScript(c, 1, 1)).toContain("Bearer <REDACTED>");
 	});
 });
 
