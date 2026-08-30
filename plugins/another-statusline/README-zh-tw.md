@@ -22,8 +22,8 @@
 - **git**:`git status --porcelain=v1 --branch` → `<branch-icon> <branch> *N +N ?N`(N = unstaged / staged / untracked;0 值省略;無 branch 只剩計數)。
 - **pr**:`gh pr view --json number,url` → `<pr-icon> #<number>`,hyperlink 指向 PR(目前佈局下 link 實際不輸出,見「hyperlink(OSC 8)」)。
 - **weather**:Open-Meteo API(無 key),顯示**下個整點**的預報:
-  - `WEATHER_LANG: "zh"`(預設):`<emoji> <H>時: <天氣> <溫度>°C <降雨機率>%`
-  - `WEATHER_LANG: "en"`:`<emoji> <weather> <temp>°C <rain>% at <H>:00`(小時移到句尾)
+  - `weather.lang: zh`(預設):`<emoji> <H>時: <天氣> <溫度>°C <降雨機率>%`
+  - `weather.lang: en`:`<emoji> <weather> <temp>°C <rain>% at <H>:00`(小時移到句尾)
   - `H` = 該整點的小時(24 小時制、不補零);降雨機率為該時隙的值,API 無機率資料時省略;未知 WMO code 省略天氣標籤。
   - 英文標籤較長,weather 段 max 已放寬到 39 cells,容納最長組合(`freezing drizzle` + `100%`)仍不截斷。
 - **stock**:Yahoo Finance chart API(無 key):
@@ -57,7 +57,7 @@ path 段以官方 `fileHyperlink`、pr 與 stock 段以 `urlHyperlink` 包(由 i
 
 ### another-statusline.yml(本擴充)
 
-不改原始碼即可自訂 segment 順序與每段最大 / 最小寬度。設定檔:
+不動原始碼即可自訂 segment 順序、每段寬度與天氣 / 股票標的。設定檔:
 
     $PI_CODING_AGENT_DIR/another-statusline.yml
     (未設環境變數時:~/.omp/agent/another-statusline.yml)
@@ -68,14 +68,26 @@ YAML(JSON 亦合法),schema 模仿 omp 內建 `statusLine`:
     segmentOptions:
       path: { max: 40, min: 10 }
       git: { max: 30, min: 8 }
+    weather:
+      location: Tokyo        # 地名;自動轉座標
+      lang: zh               # 標籤語言:zh / en
+    stock:
+      symbol: ^TWII          # Yahoo 代號
+      name: TAIEX            # 顯示名稱(可省)
 
 語義:
 
 - `segments`:**整份取代** —— 列出的才顯示、順序照列表;不列出的即隱藏(這就是關閉某段的方法);未知 id 忽略並記 log;空陣列或缺 `segments` → 內建預設全列表。id 即「顯示」一節的五段:`path` / `git` / `pr` / `weather` / `stock`。
 - `segmentOptions.<id>.max` / `min`:正整數(≥1),合併後需 min ≤ max;單一欄位無效則忽略該欄位用內建值;min > max 則該段 max / min 全用內建值。無對應 segment 的 key 忽略。
-- **存檔即生效**:每次重繪(session_start / session_switch / turn_end / 終端寬度變更 / 背景資料落地)重新讀檔,不用重啟。
+- `weather.location`:天氣城市,以**地名**設定(預設 `Taipei`)。地名經 Open-Meteo 的 geocoding API 轉座標 —— 與預報同一家、免 key —— `count=1`(取 geocoder 首選);每地名一筆結果在 process 生命週期內快取,預設城市內建座標、不會呼叫 geocoder。geocode 失敗(查無地名、網路錯誤)時該段隱藏並記一行錯誤。
+- `weather.lang`:標籤語言,`zh` 或 `en`(預設 `zh`);比對前先 trim、不分大小寫,其他值一律丟棄回落。
+- `stock.symbol` / `stock.name`:Yahoo 代號與顯示名稱(預設 `^TWII` / `TAIEX`)。自訂 symbol 未給 `name` 時以 symbol 自身顯示(如 `7203.T`);預設維持 `TAIEX`。
+- 環境變數逐 key 蓋過設定檔,設定檔再蓋過內建(**env > YAML > 內建**):`ANOTHER_WEATHER_LOCATION`、`ANOTHER_WEATHER_LANG`、`ANOTHER_STOCK_SYMBOL`、`ANOTHER_STOCK_NAME`。空白字串視同未設;值會 trim。
+- **存檔即生效**:每次重繪(session_start / session_switch / turn_end / 終端寬度變更 / 背景資料落地)重新讀檔,不用重啟。location / symbol 變更會丟掉快取,新目標資料落地前該段先隱藏(絕不顯示舊城市 / 舊指數);前一次失敗剛發生時,重抓仍受 attempt 間隔下限節流(天氣 10 分、股票 60 秒)。
 - 檔案不存在 → 靜默用預設。讀取失敗(非不存在)或解析失敗 → 用預設 + 記 `/tmp/another-statusline-errors.log` + 每進程一次錯誤通知。
 - 天氣 / 股票的背景輪詢不受 `segments` 過濾影響:維持全部啟動(資料保溫,重新啟用零延遲)。
+
+「下個整點」以本機時區計算,而 API 回傳地點時區(`timezone=auto`),城市不在本機時區時可能選錯時隙。
 
 各段預設寬度見「寬度」一節的表;`segmentOptions` 覆蓋之。
 

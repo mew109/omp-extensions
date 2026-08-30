@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseOpenMeteo, pickNextSlot, weatherText, type WeatherSlot } from "./weather";
+import { parseOpenMeteo, pickNextSlot, weatherSettings, weatherText, type WeatherSlot } from "./weather";
 
 const hourly = (times: unknown[], temps: unknown[], codes: unknown[], probs?: unknown[]): string =>
 	JSON.stringify({ hourly: { time: times, temperature_2m: temps, weather_code: codes, ...(probs ? { precipitation_probability: probs } : {}) } });
@@ -58,5 +58,41 @@ describe("weatherText", () => {
 	});
 	test("null rain omits the percentage", () => {
 		expect(weatherText({ time: "2026-08-24T15:00", temp: 26, code: 80, rain: null })).toBe("🌦️ 15時: 陣雨 26°C");
+	});
+});
+
+describe("weatherSettings", () => {
+	test("no raw, no env -> default Taipei", () => {
+		expect(weatherSettings(undefined, {})).toEqual({ location: "Taipei", lang: "zh" });
+	});
+	test("YAML weather.location overrides the default (trimmed)", () => {
+		expect(weatherSettings({ location: " Tokyo " }, {})).toEqual({ location: "Tokyo", lang: "zh" });
+	});
+	test("env overrides YAML", () => {
+		expect(weatherSettings({ location: "Tokyo" }, { ANOTHER_WEATHER_LOCATION: "Osaka" })).toEqual({ location: "Osaka", lang: "zh" });
+	});
+	test("blank env string counts as unset", () => {
+		expect(weatherSettings({ location: "Tokyo" }, { ANOTHER_WEATHER_LOCATION: "  " })).toEqual({ location: "Tokyo", lang: "zh" });
+	});
+	test("non-object raw or non-string/blank location -> default", () => {
+		expect(weatherSettings("Tokyo", {})).toEqual({ location: "Taipei", lang: "zh" });
+		expect(weatherSettings({ location: 42 }, {})).toEqual({ location: "Taipei", lang: "zh" });
+		expect(weatherSettings({ location: "" }, {})).toEqual({ location: "Taipei", lang: "zh" });
+	});
+	test("YAML weather.lang resolves independently of location", () => {
+		expect(weatherSettings({ lang: "en" }, {})).toEqual({ location: "Taipei", lang: "en" });
+	});
+	test("env ANOTHER_WEATHER_LANG overrides YAML", () => {
+		expect(weatherSettings({ lang: "zh" }, { ANOTHER_WEATHER_LANG: "en" })).toEqual({ location: "Taipei", lang: "en" });
+	});
+	test("lang matches case-insensitively after trimming", () => {
+		expect(weatherSettings(undefined, { ANOTHER_WEATHER_LANG: " EN " })).toEqual({ location: "Taipei", lang: "en" });
+	});
+	test("invalid lang falls back to zh", () => {
+		expect(weatherSettings({ lang: "fr" }, { ANOTHER_WEATHER_LANG: "  " })).toEqual({ location: "Taipei", lang: "zh" });
+		expect(weatherSettings(undefined, { ANOTHER_WEATHER_LANG: "中文" })).toEqual({ location: "Taipei", lang: "zh" });
+	});
+	test("lang and location can come from different levels", () => {
+		expect(weatherSettings({ location: "Tokyo" }, { ANOTHER_WEATHER_LANG: "en" })).toEqual({ location: "Tokyo", lang: "en" });
 	});
 });

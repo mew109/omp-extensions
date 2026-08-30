@@ -1,4 +1,5 @@
-import { run, type IconHolder, type Segment } from "../core";
+import { run } from "../core";
+import type { IconHolder, Segment } from "../index";
 
 // Git segment. Mirrors the built-in cpi renderer:
 // `git status --porcelain=v1 --branch` -> "<branch-icon> <branch> *N +N ?N".
