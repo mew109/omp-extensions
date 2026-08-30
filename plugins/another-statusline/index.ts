@@ -5,12 +5,12 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { fileHyperlink, urlHyperlink } from "@oh-my-pi/pi-coding-agent/tui";
 
-import { buildStatusLine, parseStatuslineConfig, resolveBounds, resolveSegments, type IconHolder, type Segment, type SegmentCtx, type SegmentView, type StatuslineConfig } from "./core";
+import { buildStatusLine } from "./core";
 import { pathSegment } from "./segments/path";
 import { gitSegment } from "./segments/git";
 import { prSegment } from "./segments/pr";
-import { weatherSegment } from "./segments/weather";
-import { stockSegment } from "./segments/stock";
+import { applyWeatherSettings, weatherSegment, weatherSettings } from "./segments/weather";
+import { applyStockSettings, stockSegment, stockSettings } from "./segments/stock";
 
 /**
  * Another statusline: renders the registered segments as one widget line
@@ -19,11 +19,18 @@ import { stockSegment } from "./segments/stock";
  *
  * Layout: segment order and per-segment max/min widths are configurable via
  * `$PI_CODING_AGENT_DIR/another-statusline.yml` (see README); without a
- * config file the built-in defaults apply. The rightmost entry shrinks
- * first when the line is too wide. Two spaces between segments. The line
- * must fit one terminal row: segments shrink rightmost first, down to their
- * min width, then below min (floor 1), until it fits. The budget reserves
- * 2 cells for omp's per-line widget padding (WIDGET_HPAD).
+ * config file the built-in defaults apply. Weather (location, label
+ * language) and stock (symbol, name) settings follow the same precedence
+ * (env vars > YAML > built-in defaults; see README). The rightmost entry
+ * shrinks first when the line is too wide. Two spaces between segments. The
+ * line must fit one terminal row: segments shrink rightmost first, down to
+ * their min width, then below min (floor 1), until it fits. The budget
+ * reserves 2 cells for omp's per-line widget padding (WIDGET_HPAD).
+ *
+ * Division of labor: index.ts owns the Segment contract, the loader config
+ * and the assembly; core.ts keeps the segment-agnostic machinery (width
+ * math, command runner, poller); each segment module owns its settings
+ * slice (parse + env precedence + apply).
  *
  * Hyperlinks: segments may return an href (file path or URL); index.ts wraps
  * the truncated text with the first-party fileHyperlink/urlHyperlink helpers
@@ -32,6 +39,99 @@ import { stockSegment } from "./segments/stock";
  * Not replicated (status-line-only context unavailable to extensions): the
  * worktree label, the activeRepo " relativeRepoRoot" suffix.
  */
+
+// ------------------------------------------------------------------ contract
+
+/** Structural pick of the theme symbol set; the Theme class is not typed per-glyph. */
+export interface IconHolder {
+	icon?: {
+		folder?: string;
+		scratchFolder?: string;
+		branch?: string;
+		git?: string;
+		pr?: string;
+	};
+}
+
+export interface SegmentCtx {
+	cwd: string;
+	theme: IconHolder;
+	/** Re-render the widget now (call when background data lands). */
+	rerender(): void;
+}
+
+export interface SegmentView {
+	text: string;
+	/** OSC 8 target; index.ts wraps the truncated text with it. */
+	href?: { kind: "file" | "url"; target: string };
+}
+
+export interface Segment {
+	id: string;
+	/** Width budget in cells: max = normal display cap, min = shrink floor. */
+	max: number;
+	min: number;
+	/** Squeeze policy: "head" keeps the left part (default), "tail" keeps the right (path). */
+	keep?: "head" | "tail";
+	/** Render now; null hides the segment. May be async (commands, lookups). */
+	render(ctx: SegmentCtx): SegmentView | null | Promise<SegmentView | null>;
+	/** Start background refresh (fetch cadence, timers); rerender fires on new data. */
+	start?(rerender: () => void): void;
+}
+
+// ------------------------------------------------------------- user config
+
+export interface SegmentOption {
+	max?: number;
+	min?: number;
+}
+
+interface LoaderConfig {
+	segments?: string[];
+	segmentOptions?: Record<string, SegmentOption>;
+}
+
+/** Lenient field-level parse of the raw config object; invalid fields are dropped, never fatal. */
+export function parseLoaderConfig(raw: Record<string, unknown>): LoaderConfig {
+	const cfg: LoaderConfig = {};
+	if (Array.isArray(raw.segments) && raw.segments.every((s) => typeof s === "string")) {
+		cfg.segments = raw.segments as string[];
+	}
+	if (typeof raw.segmentOptions === "object" && raw.segmentOptions !== null) {
+		const opts: Record<string, SegmentOption> = {};
+		for (const [id, val] of Object.entries(raw.segmentOptions as Record<string, unknown>)) {
+			if (typeof val !== "object" || val === null) continue;
+			const o: SegmentOption = {};
+			const v = val as Record<string, unknown>;
+			if (typeof v.max === "number" && Number.isInteger(v.max) && v.max >= 1) o.max = v.max;
+			if (typeof v.min === "number" && Number.isInteger(v.min) && v.min >= 1) o.min = v.min;
+			opts[id] = o;
+		}
+		cfg.segmentOptions = opts;
+	}
+	return cfg;
+}
+
+/** Reorder/filter segments per cfg.segments; null/empty/invalid -> all in built-in order; unknown ids excluded. */
+export function resolveSegments(all: Segment[], cfg: LoaderConfig | null): Segment[] {
+	const order = cfg?.segments;
+	if (!order || order.length === 0) return all;
+	const out: Segment[] = [];
+	for (const id of order) {
+		const seg = all.find((s) => s.id === id);
+		if (seg) out.push(seg);
+	}
+	return out;
+}
+
+/** Validated per-segment bounds; invalid fields ignored, min > max falls back to both built-ins. */
+export function resolveBounds(seg: Segment, opt: SegmentOption | undefined): { max: number; min: number } {
+	if (!opt) return { max: seg.max, min: seg.min };
+	const max = typeof opt.max === "number" ? opt.max : seg.max;
+	const min = typeof opt.min === "number" ? opt.min : seg.min;
+	if (min > max) return { max: seg.max, min: seg.min };
+	return { max, min };
+}
 
 const WIDGET_KEY = "another-statusline";
 const ERROR_LOG = "/tmp/another-statusline-errors.log";
@@ -43,8 +143,9 @@ const RESIZE_DEBOUNCE_MS = 300;
 // the rightmost entry (list tail) is the first to shrink.
 const SEGMENTS: Segment[] = [pathSegment, gitSegment, prSegment, weatherSegment, stockSegment];
 
-// User config: segment order + per-segment max/min. Re-read on every refresh
-// so saving the file takes effect without a restart; missing file = defaults.
+// User config: segment order, per-segment max/min, and segment settings
+// slices (weather, stock). Re-read on every refresh so saving the file
+// takes effect without a restart; missing file = defaults.
 const CONFIG_PATH = join(
 	process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".omp", "agent"),
 	"another-statusline.yml",
@@ -111,7 +212,7 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 		}
 	};
 
-	const loadConfig = (): StatuslineConfig | null => {
+	const loadConfig = (): Record<string, unknown> | null => {
 		let text: string;
 		try {
 			text = readFileSync(CONFIG_PATH, "utf8");
@@ -119,9 +220,18 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 			if ((err as NodeJS.ErrnoException).code !== "ENOENT") logConfigError(err);
 			return null;
 		}
-		const cfg = parseStatuslineConfig(text);
-		if (cfg === null) logConfigError(new Error(`invalid config: ${CONFIG_PATH}`));
-		return cfg;
+		if (typeof Bun === "undefined" || typeof Bun.YAML?.parse !== "function") return null;
+		let raw: unknown;
+		try {
+			raw = Bun.YAML.parse(text);
+		} catch {
+			raw = null;
+		}
+		if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+			logConfigError(new Error(`invalid config: ${CONFIG_PATH}`));
+			return null;
+		}
+		return raw as Record<string, unknown>;
 	};
 
 	// Re-renders the widget with the last context; no-op after shutdown.
@@ -139,7 +249,10 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 		refreshing = true;
 		try {
 			const sctx: SegmentCtx = { cwd: ctx.cwd, theme: ctx.ui.theme as unknown as IconHolder, rerender };
-			const cfg = loadConfig();
+			const raw = loadConfig();
+			const cfg = parseLoaderConfig(raw ?? {});
+			applyWeatherSettings(weatherSettings(raw?.weather, process.env));
+			applyStockSettings(stockSettings(raw?.stock, process.env));
 			const ordered = resolveSegments(SEGMENTS, cfg);
 			for (const id of cfg?.segments ?? []) {
 				if (!ordered.some((s) => s.id === id)) logConfigError(new Error(`unknown segment id: ${id}`), false);

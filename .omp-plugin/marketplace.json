@@ -10,7 +10,7 @@
     {
       "name": "another-statusline",
       "description": "Statusline widget combining path, git, PR, weather and stock segments",
-      "version": "0.2.1",
+      "version": "0.3.0",
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/another-statusline"

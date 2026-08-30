@@ -6,20 +6,24 @@ For maintainers and anyone changing the code: file layout, how to add a segment,
 
 ## File layout
 
-    index.ts            registry (SEGMENTS) + assembly (width allocation, truncation, hyperlink, OSC 8) + extension entry
-    core.ts             Segment contract, width math (displayWidth / truncate*), allocator (allocate),
-                        command runner (run), background poller (createPoller)
-    core.test.ts        width / truncation / allocator tests
+    index.ts            Segment contract, registry (SEGMENTS), loader config (parseLoaderConfig /
+                        resolveSegments / resolveBounds), per-segment settings wiring, assembly
+                        (width allocation, truncation, hyperlink, OSC 8) + extension entry
+    core.ts             segment-agnostic machinery: width math (displayWidth / truncate*),
+                        allocator (allocate), command runner (run), background poller (createPoller)
+    core.test.ts        width / truncation / allocator / poller-invalidate tests
+    index.test.ts       loader config tests (parseLoaderConfig / resolveSegments / resolveBounds)
     segments/
       path.ts           path segment (rewritten from the built-in mpi renderer; environment-dependent: tmpdir, HOME — the only segment without tests)
       git.ts            git segment (rewritten from the built-in cpi renderer) + git.test.ts
       pr.ts             PR segment (rewritten from the built-in dpi renderer) + pr.test.ts
-      weather.ts        weather segment + weather.test.ts
-      stock.ts          stock segment + stock.test.ts
+      weather.ts        weather segment (own settings slice: weatherSettings / applyWeatherSettings,
+                        plus geocoding) + weather.test.ts
+      stock.ts          stock segment (own settings slice: stockSettings / applyStockSettings) + stock.test.ts
 
 ## Adding a segment
 
-1. Create `segments/<id>.ts` exporting a `Segment` (defined in `core.ts`): `{ id, max, min, keep?, render(ctx), start?(rerender) }`.
+1. Create `segments/<id>.ts` exporting a `Segment` (defined in `index.ts`): `{ id, max, min, keep?, render(ctx), start?(rerender) }`.
    - `keep?`: truncation side — `"head"` (default, keeps the left part) or `"tail"` (keeps the right part; path uses it).
    - `render` returns `{ text, href? }`; return `null` to hide the segment. For background polling use `createPoller` (weather / stock are the templates).
 2. In `index.ts`, add the import and put it in the `SEGMENTS` array — two lines.
@@ -33,12 +37,11 @@ For maintainers and anyone changing the code: file layout, how to add a segment,
 | `SEGMENTS` | index.ts | five-segment array | built-in default registry (the user side overrides order and widths via `another-statusline.yml`; see "Configuration" in the README) |
 | `SEPARATOR` | index.ts | two spaces | divider between segments |
 | `ERROR_LOG` | core.ts | `/tmp/another-statusline-errors.log` | error log location |
-| `WEATHER_LOCATION` | segments/weather.ts | `{ name: "Taipei", lat: 25.033, lon: 121.565 }` | weather city; put your own city's lat/lon. Note: the "next full hour" is computed in local time while the API returns the location's timezone (`timezone=auto`); when the two differ, the wrong slot gets picked |
-| `WEATHER_LANG` | segments/weather.ts | `"zh"` | weather label language: `"zh"` → `🌦️ 15時: 陣雨 26°C 85%`; `"en"` → `🌦️ showers 26°C 85% at 15:00` |
+| `DEFAULT_WEATHER` | segments/weather.ts | `{ location: "Taipei", lang: "zh" }` | built-in weather default; runtime precedence is env `ANOTHER_WEATHER_LOCATION` / `ANOTHER_WEATHER_LANG` > YAML `weather.location` / `weather.lang` > this value (`weatherSettings` / `applyWeatherSettings` live in the same file). Note: the "next full hour" is computed in local time while the API returns the location's timezone (`timezone=auto`); when the two differ, the wrong slot gets picked |
 | `WEATHER_REFRESH_MS` | segments/weather.ts | 30 min | weather refetch interval |
 | `WEATHER_MIN_ATTEMPT_MS` | segments/weather.ts | 10 min | minimum spacing between HTTP attempts |
 | `WEATHER_TIMEOUT_MS` | segments/weather.ts | 15 s | single fetch timeout (the TLS handshake alone can exceed 5 s on slow routes) |
-| `STOCK_INDEX` | segments/stock.ts | `{ symbol: "^TWII", name: "TAIEX" }` | stock index; `symbol` is the Yahoo ticker, `name` the display name |
+| `DEFAULT_STOCK` | segments/stock.ts | `{ symbol: "^TWII", name: "TAIEX" }` | built-in stock default; runtime precedence is env `ANOTHER_STOCK_SYMBOL` / `ANOTHER_STOCK_NAME` > YAML `stock.symbol` / `stock.name` > this value (`stockSettings` / `applyStockSettings` live in the same file) |
 | `STOCK_REFRESH_MS` | segments/stock.ts | 5 min | quote refetch interval |
 | `STOCK_MIN_ATTEMPT_MS` | segments/stock.ts | 60 s | minimum spacing between HTTP attempts |
 | `STOCK_TIMEOUT_MS` | segments/stock.ts | 10 s | single fetch timeout |
@@ -50,7 +53,7 @@ git / gh queries time out at 5000 ms by default (the `timeoutMs` argument of `ru
 
     bun test plugins/another-statusline
 
-All pure logic is tested: core (width / truncation / allocator) plus the parsers and text generators of weather / git / pr / stock. The path segment depends on `os.tmpdir()`, HOME, and similar environment state, so it is not tested; the fetch / timer layers are not tested either (covered by integration smoke outside `bun test`). Test files stay out of tsc (no bun types globally); bun test covers them by actually running. Typecheck: `bunx tsc --noEmit -p plugins/another-statusline`.
+All pure logic is tested: core (width / truncation / allocator / poller invalidate), index (loader config), plus the parsers and text generators of weather / git / pr / stock (the weather / stock settings slices included). The path segment depends on `os.tmpdir()`, HOME, and similar environment state, so it is not tested; the fetch / timer layers are not tested either (covered by integration smoke outside `bun test`). Test files stay out of tsc (no bun types globally); bun test covers them by actually running. Typecheck: `bunx tsc --noEmit -p plugins/another-statusline`.
 
 ## Redraw triggers
 

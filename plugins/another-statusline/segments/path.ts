@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 
-import type { Segment } from "../core";
+import type { Segment } from "../index";
 
 // Path segment. Mirrors the built-in mpi renderer: scratch roots collapse to
 // the trailing relative path with a scratch icon, work prefixes strip, home

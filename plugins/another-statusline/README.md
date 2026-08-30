@@ -23,8 +23,8 @@ Two spaces separate segments. The `segments` config key sets the order (without 
 - **git**: `git status --porcelain=v1 --branch` → `<branch-icon> <branch> *N +N ?N` (N = unstaged / staged / untracked; zero counts are omitted; without a branch, only the counts remain).
 - **pr**: `gh pr view --json number,url` → `<pr-icon> #<number>`, hyperlinked to the PR (links never actually emit under the current layout — see "Hyperlinks (OSC 8)").
 - **weather**: Open-Meteo API (no key). Shows the forecast for the **next full hour**:
-  - `WEATHER_LANG: "zh"` (default): `<emoji> <H>時: <天氣> <溫度>°C <降雨機率>%`
-  - `WEATHER_LANG: "en"`: `<emoji> <weather> <temp>°C <rain>% at <H>:00` (hour moves to the end)
+  - `weather.lang: zh` (default): `<emoji> <H>時: <天氣> <溫度>°C <降雨機率>%`
+  - `weather.lang: en`: `<emoji> <weather> <temp>°C <rain>% at <H>:00` (hour moves to the end)
   - `H` is that hour in 24-hour form, unpadded; the rain probability is that slot's value, omitted when the API has none; unknown WMO codes drop the weather label.
   - English labels are longer, so the weather segment's max is widened to 39 cells to fit the longest combination (`freezing drizzle` + `100%`) without truncation.
 - **stock**: Yahoo Finance chart API (no key):
@@ -58,7 +58,7 @@ Measured (2026-08-22, omp v17.4.2, global bun install): the `config/settings` in
 
 ### another-statusline.yml (this extension)
 
-Reorder, hide, and resize segments without touching source. Config file:
+Reorder, hide, resize segments, and set the weather / stock targets without touching source. Config file:
 
     $PI_CODING_AGENT_DIR/another-statusline.yml
     (without the env var: ~/.omp/agent/another-statusline.yml)
@@ -69,14 +69,26 @@ YAML (JSON also valid), schema modeled on omp's built-in `statusLine`:
     segmentOptions:
       path: { max: 40, min: 10 }
       git: { max: 30, min: 8 }
+    weather:
+      location: Tokyo        # place name; geocoded automatically
+      lang: zh               # label language: zh / en
+    stock:
+      symbol: ^TWII          # Yahoo ticker
+      name: TAIEX            # display name (optional)
 
 Semantics:
 
 - `segments`: **replaces the whole list** — only the listed ids show, in the given order; unlisted ids hide (this is how you turn a segment off); unknown ids are ignored and logged; an empty array or a missing `segments` falls back to the built-in default list. The ids are the five segments from "Display": `path` / `git` / `pr` / `weather` / `stock`.
 - `segmentOptions.<id>.max` / `min`: positive integers (≥1) with min ≤ max after the merge; an invalid single field is dropped and the built-in value applies; min > max drops both fields for that segment. Keys without a matching segment are ignored.
-- **Saving applies immediately**: every redraw (session_start / session_switch / turn_end / terminal resize / background data landing) re-reads the file; no restart.
+- `weather.location`: the weather city as a **place name** (default `Taipei`). Names are geocoded to coordinates via Open-Meteo's geocoding API — same provider as the forecast, no key — with `count=1`, so the geocoder's first match wins; one result per name is cached for the process lifetime, and the default city ships built-in coordinates, so it never calls the geocoder. A geocoding failure (unknown name, network error) hides the segment and logs one error line.
+- `weather.lang`: label language, `zh` or `en` (default `zh`); matched case-insensitively after trimming — any other value is dropped and falls back.
+- `stock.symbol` / `stock.name`: the Yahoo ticker and its display name (default `^TWII` / `TAIEX`). With a custom symbol but no `name`, the symbol labels itself (e.g. `7203.T`); the default keeps `TAIEX`.
+- Environment variables override the file per key, and the file overrides the built-ins (**env > YAML > built-in**): `ANOTHER_WEATHER_LOCATION`, `ANOTHER_WEATHER_LANG`, `ANOTHER_STOCK_SYMBOL`, `ANOTHER_STOCK_NAME`. Blank values count as unset; values are trimmed.
+- **Saving applies immediately**: every redraw (session_start / session_switch / turn_end / terminal resize / background data landing) re-reads the file; no restart. A changed location / symbol drops the cached data, so the segment hides until the new target's data lands (never the old city / index); a refetch right after a failed attempt still respects the attempt floor (weather 10 min, stock 60 s).
 - Missing file → defaults, silently. Read failure (other than missing) or parse failure → defaults + one line in `/tmp/another-statusline-errors.log` + one error notification per process.
 - The weather / stock background pollers ignore the `segments` filter: all of them stay started, so data stays cached and re-enabling is instant.
+
+The "next full hour" is computed in local time while the API returns the location's timezone (`timezone=auto`); for a city outside the local timezone the wrong slot can be picked.
 
 Default widths per segment are in the table under "Width"; `segmentOptions` overrides them.
 

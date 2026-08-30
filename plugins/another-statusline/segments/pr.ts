@@ -1,4 +1,5 @@
-import { run, type Segment } from "../core";
+import { run } from "../core";
+import type { Segment } from "../index";
 
 // PR segment: `gh pr view --json number,url` -> "<pr-icon> #<number>",
 // hyperlinked to the PR. Mirrors the built-in dpi renderer.

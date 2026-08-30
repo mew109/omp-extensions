@@ -2,114 +2,13 @@ import { appendFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 
 /**
- * Shared machinery for the statusline segments: the Segment contract, width
- * math, the width allocator, a command runner and a fetch poller. Segment
- * modules (segments/*.ts) import from here; index.ts assembles them.
+ * Segment-agnostic shared machinery for the statusline widget: width math,
+ * the width allocator, a command runner and a fetch poller. Segment modules
+ * (segments/*.ts) import from here; index.ts owns the Segment contract and
+ * assembles them.
  */
 
 const ERROR_LOG = "/tmp/another-statusline-errors.log";
-
-// ------------------------------------------------------------------ contract
-
-/** Structural pick of the theme symbol set; the Theme class is not typed per-glyph. */
-export interface IconHolder {
-	icon?: {
-		folder?: string;
-		scratchFolder?: string;
-		branch?: string;
-		git?: string;
-		pr?: string;
-	};
-}
-
-export interface SegmentCtx {
-	cwd: string;
-	theme: IconHolder;
-	/** Re-render the widget now (call when background data lands). */
-	rerender(): void;
-}
-
-export interface SegmentView {
-	text: string;
-	/** OSC 8 target; index.ts wraps the truncated text with it. */
-	href?: { kind: "file" | "url"; target: string };
-}
-
-export interface Segment {
-	id: string;
-	/** Width budget in cells: max = normal display cap, min = shrink floor. */
-	max: number;
-	min: number;
-	/** Squeeze policy: "head" keeps the left part (default), "tail" keeps the right (path). */
-	keep?: "head" | "tail";
-	/** Render now; null hides the segment. May be async (commands, lookups). */
-	render(ctx: SegmentCtx): SegmentView | null | Promise<SegmentView | null>;
-	/** Start background refresh (fetch cadence, timers); rerender fires on new data. */
-	start?(rerender: () => void): void;
-}
-
-// ------------------------------------------------------------- user config
-
-export interface SegmentOption {
-	max?: number;
-	min?: number;
-}
-
-export interface StatuslineConfig {
-	segments?: string[];
-	segmentOptions?: Record<string, SegmentOption>;
-}
-
-/** Parse config text (YAML; JSON is valid YAML). Non-object top level or parse failure -> null. */
-export function parseStatuslineConfig(text: string): StatuslineConfig | null {
-	if (typeof Bun === "undefined" || typeof Bun.YAML?.parse !== "function") return null;
-	let raw: unknown;
-	try {
-		raw = Bun.YAML.parse(text);
-	} catch {
-		return null;
-	}
-	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
-	const cfg: StatuslineConfig = {};
-	const rec = raw as Record<string, unknown>;
-	if (Array.isArray(rec.segments) && rec.segments.every((s) => typeof s === "string")) {
-		cfg.segments = rec.segments as string[];
-	}
-	if (typeof rec.segmentOptions === "object" && rec.segmentOptions !== null) {
-		const opts: Record<string, SegmentOption> = {};
-		for (const [id, val] of Object.entries(rec.segmentOptions as Record<string, unknown>)) {
-			if (typeof val !== "object" || val === null) continue;
-			const o: SegmentOption = {};
-			const v = val as Record<string, unknown>;
-			if (typeof v.max === "number" && Number.isInteger(v.max) && v.max >= 1) o.max = v.max;
-			if (typeof v.min === "number" && Number.isInteger(v.min) && v.min >= 1) o.min = v.min;
-			opts[id] = o;
-		}
-		cfg.segmentOptions = opts;
-	}
-	return cfg;
-}
-
-/** Reorder/filter segments per cfg.segments; null/empty/invalid -> all in built-in order; unknown ids excluded. */
-export function resolveSegments(all: Segment[], cfg: StatuslineConfig | null): Segment[] {
-	const order = cfg?.segments;
-	if (!order || order.length === 0) return all;
-	const out: Segment[] = [];
-	for (const id of order) {
-		const seg = all.find((s) => s.id === id);
-		if (seg) out.push(seg);
-	}
-	return out;
-}
-
-/** Validated per-segment bounds; invalid fields ignored, min > max falls back to both built-ins. */
-export function resolveBounds(seg: Segment, opt: SegmentOption | undefined): { max: number; min: number } {
-	if (!opt) return { max: seg.max, min: seg.min };
-	const max = typeof opt.max === "number" ? opt.max : seg.max;
-	const min = typeof opt.min === "number" ? opt.min : seg.min;
-	if (min > max) return { max: seg.max, min: seg.min };
-	return { max, min };
-}
 
 // -------------------------------------------------------------- width logic
 
@@ -230,8 +129,8 @@ export function run(cmd: string, args: string[], cwd: string, timeoutMs = 5000):
 // ------------------------------------------------------------------- poller
 
 export interface PollerSpec<T> {
-	/** Verbatim label for the error log, e.g. `weather fetch failed (Taipei)`. */
-	label: string;
+	/** Error-log label; a function is evaluated at write time so configurable names stay current. */
+	label: string | (() => string);
 	/** Refetch period (staleness threshold and background timer interval). */
 	refreshMs: number;
 	/** Floor between HTTP attempts. */
@@ -247,12 +146,14 @@ export interface Poller<T> {
 	maybeFetch(): void;
 	/** Start the unref'd refresh timer; rerender fires when fresh data lands. */
 	start(rerender: () => void): void;
+	/** Drop the cached value; the next render refetches (settings changed). */
+	invalidate(): void;
 }
 
 /**
- * Cache + cadence for a background-fetch segment (weather, stock). Fetch
- * failures keep the stale cache and only append to ERROR_LOG — they must
- * never surface as a widget-killing notify.
+ * Cache + cadence for a background-fetch segment. Fetch failures keep the
+ * stale cache and only append to ERROR_LOG — they must never surface as a
+ * widget-killing notify.
  */
 export function createPoller<T extends { fetchedAt: number }>(spec: PollerSpec<T>): Poller<T> {
 	let cache: T | null = null;
@@ -261,8 +162,9 @@ export function createPoller<T extends { fetchedAt: number }>(spec: PollerSpec<T
 	let inFlight: Promise<void> | null = null;
 
 	const log = (err: unknown): void => {
+		const label = typeof spec.label === "function" ? spec.label() : spec.label;
 		try {
-			appendFileSync(ERROR_LOG, `[${new Date().toISOString()}] ${spec.label}: ${err instanceof Error ? err.message : String(err)}\n`);
+			appendFileSync(ERROR_LOG, `[${new Date().toISOString()}] ${label}: ${err instanceof Error ? err.message : String(err)}\n`);
 		} catch {
 			// logging must never throw
 		}
@@ -303,6 +205,9 @@ export function createPoller<T extends { fetchedAt: number }>(spec: PollerSpec<T
 			const timer = setInterval(() => void fetch(), spec.refreshMs);
 			// The timer never keeps the process alive.
 			timer.unref();
+		},
+		invalidate: () => {
+			cache = null;
 		},
 	};
 }

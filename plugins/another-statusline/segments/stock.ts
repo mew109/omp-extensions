@@ -1,13 +1,50 @@
-import { createPoller, type Segment } from "../core";
+import { createPoller } from "../core";
+import type { Segment } from "../index";
 
-// Stock segment. Yahoo Finance chart API, no key. Edit STOCK_INDEX for your
-// index: symbol is the Yahoo ticker (finance.yahoo.com URL), name is the
-// label shown in the widget.
+// Stock segment. Yahoo Finance chart API, no key. Symbol and display name
+// are configurable: ANOTHER_STOCK_SYMBOL / ANOTHER_STOCK_NAME env vars >
+// `stock.symbol` / `stock.name` in another-statusline.yml > the built-in
+// default (^TWII / TAIEX); an unset name with a custom symbol shows the
+// symbol itself (e.g. `7203.T`).
 
-const STOCK_INDEX = { symbol: "^TWII", name: "TAIEX" } as const;
 const STOCK_REFRESH_MS = 5 * 60 * 1000; // refetch period
 const STOCK_MIN_ATTEMPT_MS = 60 * 1000; // floor between HTTP attempts
 const STOCK_TIMEOUT_MS = 10 * 1000; // generous for slow routes
+
+export interface StockSettings {
+	symbol: string;
+	name: string;
+}
+
+export const DEFAULT_STOCK: StockSettings = { symbol: "^TWII", name: "TAIEX" };
+
+const ENV_SYMBOL = "ANOTHER_STOCK_SYMBOL";
+const ENV_NAME = "ANOTHER_STOCK_NAME";
+
+/** Settings slice, per key: env > YAML `stock` object > default; blank strings count as unset. */
+export function stockSettings(raw: unknown, env: Record<string, string | undefined>): StockSettings {
+	const envSym = env[ENV_SYMBOL]?.trim() || undefined;
+	const envName = env[ENV_NAME]?.trim() || undefined;
+	const yaml: object = typeof raw === "object" && raw !== null ? raw : {};
+	const sym = "symbol" in yaml ? yaml.symbol : undefined;
+	const nameVal = "name" in yaml ? yaml.name : undefined;
+	const yamlSym = typeof sym === "string" && sym.trim() !== "" ? sym.trim() : undefined;
+	const yamlName = typeof nameVal === "string" && nameVal.trim() !== "" ? nameVal.trim() : undefined;
+	const symbol = envSym ?? yamlSym ?? DEFAULT_STOCK.symbol;
+	// An unset name falls back to the resolved symbol, so a custom ticker
+	// without a name labels itself (e.g. `7203.T`); the default keeps TAIEX.
+	const name = envName ?? yamlName ?? (symbol === DEFAULT_STOCK.symbol ? DEFAULT_STOCK.name : symbol);
+	return { symbol, name };
+}
+
+let active: StockSettings = DEFAULT_STOCK;
+
+/** Apply new settings; any change drops the cached quote (the name changes
+ * how a cached quote reads, so nothing stale is ever shown). */
+export function applyStockSettings(s: StockSettings): void {
+	if (s.symbol !== active.symbol || s.name !== active.name) poller.invalidate();
+	active = s;
+}
 
 export interface StockQuote {
 	price: number;
@@ -66,13 +103,13 @@ export function stockText(q: StockQuote): string {
 	// No trade today (weekend / holiday / pre-open, exchange timezone):
 	// the last session's move is not today's, so only the price shows.
 	if (q.tradeDate !== null && q.tradeDate !== exchangeDate(Date.now() / 1000, q.gmtoffset)) {
-		return ["💤", STOCK_INDEX.name, STOCK_NUM.format(q.price)].join(" ");
+		return ["💤", active.name, STOCK_NUM.format(q.price)].join(" ");
 	}
 	const chg = q.price - q.prevClose;
 	const pct = (chg / q.prevClose) * 100;
 	const signed = (n: number) => (n >= 0 ? "+" : "") + STOCK_NUM.format(n);
 	const [emoji, dir] = chg > 0 ? ["📈", "▲"] : chg < 0 ? ["📉", "▼"] : ["➖", "─"];
-	return [emoji, STOCK_INDEX.name, STOCK_NUM.format(q.price), dir, signed(chg), `${signed(pct)}%`].join(" ");
+	return [emoji, active.name, STOCK_NUM.format(q.price), dir, signed(chg), `${signed(pct)}%`].join(" ");
 }
 
 interface StockData {
@@ -81,11 +118,11 @@ interface StockData {
 }
 
 const poller = createPoller<StockData>({
-	label: `stock fetch failed (${STOCK_INDEX.symbol})`,
+	label: () => `stock fetch failed (${active.symbol})`,
 	refreshMs: STOCK_REFRESH_MS,
 	minAttemptMs: STOCK_MIN_ATTEMPT_MS,
 	async fetch() {
-		const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(STOCK_INDEX.symbol)}?range=1d&interval=1d`;
+		const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(active.symbol)}?range=1d&interval=1d`;
 		// Browser UA: Yahoo intermittently rejects bare non-browser clients.
 		const res = await fetch(url, { signal: AbortSignal.timeout(STOCK_TIMEOUT_MS), headers: { "user-agent": "Mozilla/5.0" } });
 		if (!res.ok) return null;
@@ -101,7 +138,7 @@ export const stockSegment: Segment = {
 	render() {
 		poller.maybeFetch();
 		const data = poller.data();
-		return data ? { text: stockText(data.quote), href: { kind: "url", target: `https://finance.yahoo.com/quote/${encodeURIComponent(STOCK_INDEX.symbol)}` } } : null;
+		return data ? { text: stockText(data.quote), href: { kind: "url", target: `https://finance.yahoo.com/quote/${encodeURIComponent(active.symbol)}` } } : null;
 	},
 	start(rerender) {
 		poller.start(rerender);

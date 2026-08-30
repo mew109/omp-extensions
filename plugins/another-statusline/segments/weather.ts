@@ -1,17 +1,59 @@
-import { createPoller, type Segment } from "../core";
+import { createPoller } from "../core";
+import type { Segment } from "../index";
 
-// Weather segment. Open-Meteo, no API key. Edit WEATHER_LOCATION for your
-// city (lat/lon from any coordinate source; API is timezone-aware).
-// WEATHER_LANG picks the label language: "zh" → "🌦️ 15時: 陣雨 26°C 85%",
-// "en" → "🌦️ showers 26°C 85% at 15:00".
+// Weather segment. Open-Meteo, no API key. Location is configurable:
+// ANOTHER_WEATHER_LOCATION env var > `weather.location` in
+// another-statusline.yml > the built-in default (Taipei). Place names are
+// geocoded via Open-Meteo's geocoding API (count=1 = first match); the
+// default city ships with coordinates and never calls it.
+// The label language is configurable too: ANOTHER_WEATHER_LANG env var >
+// `weather.lang` in another-statusline.yml > the built-in "zh"; values are
+// "zh" → "🌦️ 15時: 陣雨 26°C 85%", "en" → "🌦️ showers 26°C 85% at 15:00".
 
-const WEATHER_LOCATION = { name: "Taipei", lat: 25.033, lon: 121.565 } as const;
-const WEATHER_LANG: WeatherLang = "zh";
 const WEATHER_REFRESH_MS = 30 * 60 * 1000; // refetch period (>= 10min, << 1 day)
 const WEATHER_MIN_ATTEMPT_MS = 10 * 60 * 1000; // floor between HTTP attempts
 const WEATHER_TIMEOUT_MS = 15 * 1000; // bad routes to Open-Meteo can spend ~5s on TLS alone
 
 export type WeatherLang = "zh" | "en";
+
+export interface WeatherSettings {
+	location: string;
+	lang: WeatherLang;
+}
+
+export const DEFAULT_WEATHER: WeatherSettings = { location: "Taipei", lang: "zh" };
+
+const ENV_LOCATION = "ANOTHER_WEATHER_LOCATION";
+const ENV_LANG = "ANOTHER_WEATHER_LANG";
+
+/** Settings slice: env > YAML `weather.location` / `weather.lang` > defaults;
+ * blank or invalid values count as unset. */
+export function weatherSettings(raw: unknown, env: Record<string, string | undefined>): WeatherSettings {
+	const envLoc = env[ENV_LOCATION]?.trim() || undefined;
+	const rawLoc = typeof raw === "object" && raw !== null && "location" in raw ? raw.location : undefined;
+	const yamlLoc = typeof rawLoc === "string" && rawLoc.trim() !== "" ? rawLoc.trim() : undefined;
+	// lang must normalize to exactly "zh" or "en"; anything else counts as unset
+	const parseLang = (v: unknown): WeatherLang | undefined => {
+		const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+		return s === "zh" || s === "en" ? s : undefined;
+	};
+	const envLang = parseLang(env[ENV_LANG]);
+	const rawLang = typeof raw === "object" && raw !== null && "lang" in raw ? raw.lang : undefined;
+	const yamlLang = parseLang(rawLang);
+	return {
+		location: envLoc ?? yamlLoc ?? DEFAULT_WEATHER.location,
+		lang: envLang ?? yamlLang ?? DEFAULT_WEATHER.lang,
+	};
+}
+
+let active: WeatherSettings = DEFAULT_WEATHER;
+
+/** Apply new settings; a changed location drops the cached weather so the
+ * segment hides until the new city's data lands (never shows the old city). */
+export function applyWeatherSettings(s: WeatherSettings): void {
+	if (s.location !== active.location) poller.invalidate();
+	active = s;
+}
 
 // WMO weather interpretation codes (Open-Meteo docs), zh / en labels.
 const WEATHER_CODES: Readonly<Record<number, { icon: string; zh: string; en: string }>> = {
@@ -114,12 +156,43 @@ interface WeatherData {
 	fetchedAt: number;
 }
 
+// One geocode result per place name, kept for the process lifetime (one
+// small entry per configured city; failures are not cached, so they retry).
+const geoCache = new Map<string, { lat: number; lon: number }>();
+geoCache.set("Taipei", { lat: 25.033, lon: 121.565 }); // built-in default: no geocode call
+
+/** Resolve a place name to coordinates via Open-Meteo geocoding (count=1 =
+ * first match); null on any failure (HTTP error, timeout, bad body). */
+async function geocode(name: string): Promise<{ lat: number; lon: number } | null> {
+	try {
+		const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1`;
+		const res = await fetch(url, { signal: AbortSignal.timeout(WEATHER_TIMEOUT_MS) });
+		if (!res.ok) return null;
+		const o: unknown = await res.json();
+		if (typeof o !== "object" || o === null || !("results" in o)) return null;
+		const results = o.results;
+		if (!Array.isArray(results) || results.length === 0) return null;
+		const first = results[0];
+		if (typeof first !== "object" || first === null) return null;
+		const lat = "latitude" in first ? first.latitude : undefined;
+		const lon = "longitude" in first ? first.longitude : undefined;
+		if (typeof lat !== "number" || !Number.isFinite(lat) || typeof lon !== "number" || !Number.isFinite(lon)) return null;
+		const coords = { lat, lon };
+		geoCache.set(name, coords);
+		return coords;
+	} catch {
+		return null;
+	}
+}
+
 const poller = createPoller<WeatherData>({
-	label: `weather fetch failed (${WEATHER_LOCATION.name})`,
+	label: () => `weather fetch failed (${active.location})`,
 	refreshMs: WEATHER_REFRESH_MS,
 	minAttemptMs: WEATHER_MIN_ATTEMPT_MS,
 	async fetch() {
-		const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LOCATION.lat}&longitude=${WEATHER_LOCATION.lon}&hourly=temperature_2m,weather_code,precipitation_probability&forecast_days=2&timezone=auto`;
+		const coords = geoCache.get(active.location) ?? (await geocode(active.location));
+		if (!coords) throw new Error(`geocode failed: ${active.location}`);
+		const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&hourly=temperature_2m,weather_code,precipitation_probability&forecast_days=2&timezone=auto`;
 		const res = await fetch(url, { signal: AbortSignal.timeout(WEATHER_TIMEOUT_MS) });
 		if (!res.ok) return null;
 		const slots = parseOpenMeteo(await res.text());
@@ -135,7 +208,7 @@ export const weatherSegment: Segment = {
 		poller.maybeFetch();
 		const slots = poller.data()?.slots ?? null;
 		const slot = slots ? pickNextSlot(slots) : null;
-		return slot ? { text: weatherText(slot, WEATHER_LANG) } : null;
+		return slot ? { text: weatherText(slot, active.lang) } : null;
 	},
 	start(rerender) {
 		poller.start(rerender);
