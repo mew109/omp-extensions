@@ -10,7 +10,7 @@
     {
       "name": "another-statusline",
       "description": "Statusline widget combining path, git, PR, weather and stock segments",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/another-statusline"
@@ -26,7 +26,7 @@
     {
       "name": "dump-as-curl",
       "description": "Dump the last LLM request as an executable curl script (/dump-as-curl)",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "development",
       "license": "MIT",
       "source": "./plugins/dump-as-curl"
@@ -34,7 +34,7 @@
     {
       "name": "omp-cc-user",
       "description": "Manage personal ~/.claude resources (skills, plugins, commands, mcp servers) and their omp visibility",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/omp-cc-user"
@@ -50,7 +50,7 @@
     {
       "name": "omp-segments-to-widgets",
       "description": "Procedure for moving OMP status-line segments into safe, width-aware extension widgets",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "development",
       "license": "MIT",
       "source": "./plugins/omp-segments-to-widgets"

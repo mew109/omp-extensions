@@ -13,6 +13,8 @@
 | omp-herdr-tab-title | 把目前的 herdr 分頁改名為 omp session 標題(最多 12 顯示欄);不在 herdr 環境時不做任何事 | extension |
 | omp-segments-to-widgets | 把 OMP 狀態列段改成安全、寬度感知的 extension widgets 的程序 | skill |
 
+Windows 支援仍屬實驗性:僅由 `check-windows` CI job 驗證,尚未在實機 Windows 上測試。
+
 ## 安裝
 
     omp plugin marketplace add https://github.com/mew109/omp-extensions

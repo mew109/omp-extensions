@@ -85,7 +85,7 @@ Semantics:
 - `stock.symbol` / `stock.name`: the Yahoo ticker and its display name (default `^TWII` / `TAIEX`). With a custom symbol but no `name`, the symbol labels itself (e.g. `7203.T`); the default keeps `TAIEX`.
 - Environment variables override the file per key, and the file overrides the built-ins (**env > YAML > built-in**): `ANOTHER_WEATHER_LOCATION`, `ANOTHER_WEATHER_LANG`, `ANOTHER_STOCK_SYMBOL`, `ANOTHER_STOCK_NAME`. Blank values count as unset; values are trimmed.
 - **Saving applies immediately**: every redraw (session_start / session_switch / turn_end / terminal resize / background data landing) re-reads the file; no restart. A changed location / symbol drops the cached data, so the segment hides until the new target's data lands (never the old city / index); a refetch right after a failed attempt still respects the attempt floor (weather 10 min, stock 60 s).
-- Missing file → defaults, silently. Read failure (other than missing) or parse failure → defaults + one line in `/tmp/another-statusline-errors.log` + one error notification per process.
+- Missing file → defaults, silently. Read failure (other than missing) or parse failure → defaults + one line in the error log under the OS tmp dir (`os.tmpdir()`), `another-statusline-errors.log`, + one error notification per process.
 - The weather / stock background pollers ignore the `segments` filter: all of them stay started, so data stays cached and re-enabling is instant.
 
 The "next full hour" is computed in local time while the API returns the location's timezone (`timezone=auto`); for a city outside the local timezone the wrong slot can be picked.

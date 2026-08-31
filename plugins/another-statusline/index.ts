@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { fileHyperlink, urlHyperlink } from "@oh-my-pi/pi-coding-agent/tui";
 
-import { buildStatusLine } from "./core";
+import { buildStatusLine, ERROR_LOG } from "./core";
 import { pathSegment } from "./segments/path";
 import { gitSegment } from "./segments/git";
 import { prSegment } from "./segments/pr";
@@ -134,7 +134,6 @@ export function resolveBounds(seg: Segment, opt: SegmentOption | undefined): { m
 }
 
 const WIDGET_KEY = "another-statusline";
-const ERROR_LOG = "/tmp/another-statusline-errors.log";
 const SEPARATOR = "  ";
 const RESIZE_DEBOUNCE_MS = 300;
 

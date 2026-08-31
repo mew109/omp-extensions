@@ -84,7 +84,7 @@ YAML(JSON 亦合法),schema 模仿 omp 內建 `statusLine`:
 - `stock.symbol` / `stock.name`:Yahoo 代號與顯示名稱(預設 `^TWII` / `TAIEX`)。自訂 symbol 未給 `name` 時以 symbol 自身顯示(如 `7203.T`);預設維持 `TAIEX`。
 - 環境變數逐 key 蓋過設定檔,設定檔再蓋過內建(**env > YAML > 內建**):`ANOTHER_WEATHER_LOCATION`、`ANOTHER_WEATHER_LANG`、`ANOTHER_STOCK_SYMBOL`、`ANOTHER_STOCK_NAME`。空白字串視同未設;值會 trim。
 - **存檔即生效**:每次重繪(session_start / session_switch / turn_end / 終端寬度變更 / 背景資料落地)重新讀檔,不用重啟。location / symbol 變更會丟掉快取,新目標資料落地前該段先隱藏(絕不顯示舊城市 / 舊指數);前一次失敗剛發生時,重抓仍受 attempt 間隔下限節流(天氣 10 分、股票 60 秒)。
-- 檔案不存在 → 靜默用預設。讀取失敗(非不存在)或解析失敗 → 用預設 + 記 `/tmp/another-statusline-errors.log` + 每進程一次錯誤通知。
+- 檔案不存在 → 靜默用預設。讀取失敗(非不存在)或解析失敗 → 用預設 + 記 OS tmp dir(`os.tmpdir()`)下的錯誤 log `another-statusline-errors.log` + 每進程一次錯誤通知。
 - 天氣 / 股票的背景輪詢不受 `segments` 過濾影響:維持全部啟動(資料保溫,重新啟用零延遲)。
 
 「下個整點」以本機時區計算,而 API 回傳地點時區(`timezone=auto`),城市不在本機時區時可能選錯時隙。

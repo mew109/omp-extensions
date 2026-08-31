@@ -20,7 +20,7 @@
 | 參數 | 說明 |
 |---|---|
 | `--index N` | 要 dump 第幾筆擷取:1 = 最新(預設 1;保留最後 8 筆) |
-| `--filename FILE` | 輸出檔:純檔名放 OS tmp 目錄;含 `/` 的路徑以 cwd 解析 |
+| `--filename FILE` | 輸出檔:純檔名放 OS tmp 目錄;含 `/`(Windows 亦含 `\`)的路徑以 cwd 為基準 |
 | `--no-redact` | 保留原始的 Authorization: Bearer token(預設換成 `Bearer <REDACTED>`) |
 | `--help` | 顯示說明 |
 
@@ -65,6 +65,8 @@ key 對待:維持 0700、重放完就刪除。ring 僅存於記憶體,存活整�
 - 副產生的 request(標題生成、advisors、subagents、web-search LLM)與
   主對話共用 ring——用 `--index` 取較早的。
 - ACP 客戶端可能不顯示狀態訊息;檔案仍會寫入——請查看 tmp 目錄。
+- Windows 支援仍屬實驗性(僅 CI 驗證)。輸出腳本是 POSIX shell 腳本,請在
+  WSL 或 git-bash 執行。
 
 ## 移除
 

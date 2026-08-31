@@ -13,6 +13,8 @@ A personal omp plugin marketplace, named `omp-extensions`. It contains the follo
 | omp-herdr-tab-title | Renames the current herdr tab to the omp session title (max 12 display columns); no-op outside herdr | extension |
 | omp-segments-to-widgets | Procedure for moving OMP status-line segments into safe, width-aware extension widgets | skill |
 
+Windows support is experimental: verified by the `check-windows` CI job only, not yet tested on real Windows hardware.
+
 ## Install
 
     omp plugin marketplace add https://github.com/mew109/omp-extensions

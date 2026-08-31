@@ -22,7 +22,7 @@ endpoints and remote providers alike.
 | Flag | Meaning |
 |---|---|
 | `--index N` | which capture to dump: 1 = newest (default 1; the last 8 are kept) |
-| `--filename FILE` | output file: a bare name goes to the OS tmp dir; a path with `/` resolves against the cwd |
+| `--filename FILE` | output file: a bare name goes to the OS tmp dir; a path with `/` (or `\` on Windows) resolves against the cwd |
 | `--no-redact` | keep the original Authorization: Bearer token (default: replaced with `Bearer <REDACTED>`) |
 | `--help` | show help |
 
@@ -70,6 +70,8 @@ then delete it. The ring lives in memory for the process lifetime.
   share the ring — use `--index` to reach earlier ones.
 - ACP clients may not surface the status message; the file is still
   written — check the tmp dir.
+- Windows support is experimental (CI-verified only). The emitted script is
+  a POSIX shell script — replay it from WSL or git-bash.
 
 ## Uninstall
 
