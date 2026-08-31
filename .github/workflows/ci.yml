@@ -32,6 +32,13 @@ jobs:
         run: bun test plugins/dump-as-curl
       - name: typecheck dump-as-curl
         run: bunx tsc@7.0.2 --noEmit -p plugins/dump-as-curl
+      - name: install omp-herdr-tab-title deps
+        run: bun install --frozen-lockfile
+        working-directory: plugins/omp-herdr-tab-title
+      - name: test omp-herdr-tab-title
+        run: bun test plugins/omp-herdr-tab-title
+      - name: typecheck omp-herdr-tab-title
+        run: bunx tsc@7.0.2 --noEmit -p plugins/omp-herdr-tab-title
       - name: version parity (marketplace vs package.json)
         run: |
           bun -e '

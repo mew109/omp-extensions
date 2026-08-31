@@ -1,0 +1,11 @@
+{
+  "name": "omp-herdr-tab-title",
+  "version": "0.1.0",
+  "private": true,
+  "devDependencies": {
+    "@oh-my-pi/pi-coding-agent": "18.0.10",
+    "@types/bun": "^1.4.0",
+    "@types/node": "^26.3.0"
+  },
+  "omp": { "extensions": ["./index.ts"] }
+}
