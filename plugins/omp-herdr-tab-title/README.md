@@ -18,6 +18,7 @@ An omp extension that renames the current herdr tab to the omp session title, sh
 - **Last writer wins** if several omp sessions share one herdr tab.
 - Labels are width-aware: CJK chars count as 2 columns, so CJK titles yield fewer than 12 characters.
 - If several events fire before the auto title exists, the extension retries at +2 s/+6 s/+12 s after the turn, then waits for the next event. It never polls forever.
+- **Known issue:** the tab label does not follow the foreground process. `fg` sends no event into omp, so when several omp sessions share one tab and you switch between them in the shell, the tab keeps the label of the last session that wrote it.
 
 ## Environment
 
