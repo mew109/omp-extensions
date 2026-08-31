@@ -38,6 +38,8 @@ Run via bash, then relay the script output verbatim to the user — no interpret
 python3 skill://omp-cc-user/scripts/omp_cc_user.py <args>
 ```
 
+On Windows, if `python3` is not on PATH, use `python` or `py -3` with the same arguments.
+
 With no args or unknown args, print the usage table above.
 
 Note: plugin entries match by name; a name shared with another plugin's

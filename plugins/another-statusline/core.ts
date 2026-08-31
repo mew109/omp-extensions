@@ -1,5 +1,7 @@
 import { appendFileSync } from "node:fs";
 import { execFile } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * Segment-agnostic shared machinery for the statusline widget: width math,
@@ -8,7 +10,7 @@ import { execFile } from "node:child_process";
  * assembles them.
  */
 
-const ERROR_LOG = "/tmp/another-statusline-errors.log";
+export const ERROR_LOG = join(tmpdir(), "another-statusline-errors.log");
 
 // -------------------------------------------------------------- width logic
 

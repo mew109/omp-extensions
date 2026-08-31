@@ -110,7 +110,7 @@ A widget must not turn a refresh failure into an OMP crash or unhandled rejectio
 - Put external commands, parsing, width calculation, and `setWidget` inside a `try/catch/finally`; always clear `refreshing` in `finally`.
 - Every fire-and-forget call such as `void refresh(state)` must attach `.catch(...)`, including calls from timers, session events, and initial startup. A `try/catch` around the call does not catch a later rejected promise.
 - Guard synchronous session event handlers as well, because UI cleanup and session state access can throw.
-- Log the full stack trace to a fixed file under `/tmp`, for example `/tmp/second-statusline-errors.log`, and show only the short error message plus the file path. Append rather than overwrite so repeated failures remain available.
+- Log the full stack trace to a fixed file under the OS temp dir (`os.tmpdir()`; e.g. `/tmp/second-statusline-errors.log` on macOS/Linux), and show only the short error message plus the file path. Append rather than overwrite so repeated failures remain available.
 - If the log write fails, show only the short error message. Error reporting must never throw or create a second unhandled rejection.
 - Keep error reporting synchronous and dependency-free. `appendFileSync` is suitable for this small diagnostic path.
 

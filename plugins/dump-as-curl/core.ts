@@ -235,6 +235,6 @@ export function defaultOutPath(): string {
 
 export function resolveOutPath(filename: string | undefined, cwd: string): string {
 	if (filename === undefined) return defaultOutPath();
-	if (filename.includes("/")) return pathResolve(cwd, filename);
+	if (filename.includes("/") || (process.platform === "win32" && filename.includes("\\"))) return pathResolve(cwd, filename);
 	return pathJoin(tmpdir(), filename);
 }

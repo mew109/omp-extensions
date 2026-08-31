@@ -300,10 +300,20 @@ describe("resolveOutPath", () => {
 		expect(resolveOutPath("out.sh", "/tmp")).toBe(join(tmpdir(), "out.sh"));
 	});
 	test("cwd-relative path resolves against cwd", () => {
-		expect(resolveOutPath("./out.sh", "/work")).toBe("/work/out.sh");
+		expect(resolveOutPath("./out.sh", "/work")).toBe(resolve("/work", "./out.sh"));
 	});
 	test("absolute path passes through", () => {
-		expect(resolveOutPath("/tmp/x/out.sh", "/work")).toBe("/tmp/x/out.sh");
+		expect(resolveOutPath("/tmp/x/out.sh", "/work")).toBe(resolve("/work", "/tmp/x/out.sh"));
+	});
+	test("windows drive path: cwd on win32, tmp dir elsewhere", () => {
+		expect(resolveOutPath("C:\\tmp\\out.sh", "/work")).toBe(
+			process.platform === "win32" ? resolve("/work", "C:\\tmp\\out.sh") : join(tmpdir(), "C:\\tmp\\out.sh"),
+		);
+	});
+	test("backslash relative name: cwd on win32, tmp dir elsewhere", () => {
+		expect(resolveOutPath("sub\\out.sh", "/work")).toBe(
+			process.platform === "win32" ? resolve("/work", "sub\\out.sh") : join(tmpdir(), "sub\\out.sh"),
+		);
 	});
 });
 
