@@ -10,6 +10,7 @@
 | code-mode | PTC 式 code mode:模型只能呼叫 eval/ask/read/write,其他工具經 kernel tool bridge 使用 | extension |
 | dump-as-curl | 把 omp 最後一次送給 LLM 的 request dump 成可直接執行的 curl 指令檔 | extension |
 | omp-cc-user | 管理哪些個人 `~/.claude` 資源(skills、plugins、slash commands、mcp servers)在 omp 顯示 | skill + slash command |
+| omp-herdr-tab-title | 把目前的 herdr 分頁改名為 omp session 標題(最多 12 顯示欄);不在 herdr 環境時不做任何事 | extension |
 | omp-segments-to-widgets | 把 OMP 狀態列段改成安全、寬度感知的 extension widgets 的程序 | skill |
 
 ## 安裝
@@ -19,6 +20,7 @@
     omp plugin install code-mode@omp-extensions
     omp plugin install dump-as-curl@omp-extensions
     omp plugin install omp-cc-user@omp-extensions
+    omp plugin install omp-herdr-tab-title@omp-extensions
     omp plugin install omp-segments-to-widgets@omp-extensions
 
 本機開發時改用 repo 路徑:`omp plugin marketplace add <path-to-repo>`。

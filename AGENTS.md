@@ -4,12 +4,13 @@ Rules for coding agents working in this repo.
 
 ## What this repo is
 
-A personal omp plugin marketplace (`omp-extensions`). Five plugins live under `plugins/`:
+A personal omp plugin marketplace (`omp-extensions`). Six plugins live under `plugins/`:
 
 - **another-statusline** (extension): statusline widget — path/git/pr merged into one segment row, plus weather and stock. TypeScript, tested with `bun test`.
 - **code-mode** (extension): PTC-style code mode (tool set limited to eval/ask/read/write).
 - **dump-as-curl** (extension): `/dump-as-curl [--index N] [--filename FILE] [--help]` writes a captured LLM request (in-process `globalThis.fetch` interception) as an executable curl script.
 - **omp-cc-user** (skill + slash command): manages which `~/.claude` resources are visible in omp.
+- **omp-herdr-tab-title** (extension): renames the herdr tab to the omp session title (≤12 columns) on first title / resume; no-op outside herdr.
 - **omp-segments-to-widgets** (skill): procedure for turning statusline segments into widgets.
 
 `.omp-plugin/marketplace.json` is the marketplace manifest and the source of truth for plugin versions. The root README is the front page.
@@ -26,7 +27,7 @@ A personal omp plugin marketplace (`omp-extensions`). Five plugins live under `p
 
 ## Docs
 
-- Root README and the three doc'd plugins (another-statusline, code-mode, omp-cc-user): `README.md` / `CONTRIBUTING.md` English with a Chinese counterpart `README-zh-tw.md` / `CONTRIBUTING-zh-tw.md` (lowercase, uniform). omp-segments-to-widgets ships no README.
+- Root README and the five doc'd plugins (another-statusline, code-mode, dump-as-curl, omp-cc-user, omp-herdr-tab-title): `README.md` / `CONTRIBUTING.md` English with a Chinese counterpart `README-zh-tw.md` / `CONTRIBUTING-zh-tw.md` (lowercase, uniform). omp-segments-to-widgets ships no README.
 - Every doc with a language pair (root README included) keeps the two versions in sync — edit both in one change.
 - No machine-local paths in any tracked file (docs, tsconfig, scripts — e.g. `/home/...`). Use the GitHub URL, a `<placeholder>`, or local devDependencies. For tsconfig this means resolving types via `node_modules`, never via absolute `typeRoots`/`paths`.
 

@@ -4,7 +4,7 @@
     "name": "mew"
   },
   "metadata": {
-    "description": "Personal omp plugins: another-statusline, code-mode, dump-as-curl, omp-cc-user, omp-segments-to-widgets"
+    "description": "Personal omp plugins: another-statusline, code-mode, dump-as-curl, omp-cc-user, omp-herdr-tab-title, omp-segments-to-widgets"
   },
   "plugins": [
     {
@@ -38,6 +38,14 @@
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/omp-cc-user"
+    },
+    {
+      "name": "omp-herdr-tab-title",
+      "description": "Rename the herdr tab to the omp session title (max 12 columns)",
+      "version": "0.1.0",
+      "category": "productivity",
+      "license": "MIT",
+      "source": "./plugins/omp-herdr-tab-title"
     },
     {
       "name": "omp-segments-to-widgets",
