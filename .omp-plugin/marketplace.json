@@ -41,8 +41,8 @@
     },
     {
       "name": "omp-herdr-tab-title",
-      "description": "Rename the herdr tab to the omp session title (max 12 columns)",
-      "version": "0.1.0",
+      "description": "Rename the herdr tab to the omp session title (max 16 columns)",
+      "version": "0.2.0",
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/omp-herdr-tab-title"

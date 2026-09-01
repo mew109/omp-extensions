@@ -1,4 +1,4 @@
-export function abbreviateSessionName(name: string, maxColumns = 12): string {
+export function abbreviateSessionName(name: string, maxColumns = 15): string {
 	// Strip control chars, collapse whitespace runs, trim.
 	const cleaned = name
 		.replace(/\p{Cc}/gu, "")
@@ -9,13 +9,17 @@ export function abbreviateSessionName(name: string, maxColumns = 12): string {
 	const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 	let out = "";
 	let width = 0;
+	let truncated = false;
 	for (const { segment } of segmenter.segment(cleaned)) {
 		const w = Bun.stringWidth(segment);
-		if (width + w > maxColumns) break;
+		if (width + w > maxColumns) {
+			truncated = true;
+			break;
+		}
 		out += segment;
 		width += w;
 	}
-	return out.trimEnd();
+	return out.trimEnd() + (truncated ? "…" : "");
 }
 
 export function herdrSpawnTarget(
