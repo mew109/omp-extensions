@@ -97,8 +97,9 @@ export function allocate(budget: number, segs: SegBudget[]): number[] {
 	return w;
 }
 
-/** omp renders each setWidget line as Text(line, 1, 0): 1 padding cell per side.
- * tui.tight removes it; budget for the default so the line never wraps. */
+/** Padding budget for the setWidget surface only: omp renders each widget
+ * line as Text(line, 1, 0) (1 cell per side); tui.tight removes it. The
+ * status surface renders full width, so callers there pass hpad = 0. */
 export const WIDGET_HPAD = 2;
 
 export interface LineSeg {
@@ -108,11 +109,11 @@ export interface LineSeg {
 	min: number;
 }
 
-/** Truncate segments to fit one widget line inside `termWidth` cells
- * (separators included): budget = termWidth - WIDGET_HPAD - separators,
- * shrink rightmost first via allocate. Returns the truncated per-segment texts. */
-export function buildStatusLine(segs: LineSeg[], termWidth: number, separator = "  "): string[] {
-	const budget = termWidth - WIDGET_HPAD - (segs.length - 1) * separator.length;
+/** Truncate segments to fit one statusline row inside `termWidth` cells
+ * (separators included): budget = termWidth - hpad - separators, shrink
+ * rightmost first via allocate. Returns the truncated per-segment texts. */
+export function buildStatusLine(segs: LineSeg[], termWidth: number, separator = "  ", hpad: number = WIDGET_HPAD): string[] {
+	const budget = termWidth - hpad - (segs.length - 1) * separator.length;
 	const widths = allocate(budget, segs.map((s) => ({ desired: Math.min(displayWidth(s.text), s.max), min: s.min })));
 	return segs.map((s, i) => truncate(s.text, s.keep, widths[i]));
 }

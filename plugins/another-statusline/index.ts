@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { fileHyperlink, urlHyperlink } from "@oh-my-pi/pi-coding-agent/tui";
 
-import { buildStatusLine, ERROR_LOG } from "./core";
+import { buildStatusLine, ERROR_LOG, WIDGET_HPAD } from "./core";
 import { pathSegment } from "./segments/path";
 import { gitSegment } from "./segments/git";
 import { prSegment } from "./segments/pr";
@@ -13,8 +13,9 @@ import { applyWeatherSettings, weatherSegment, weatherSettings } from "./segment
 import { applyStockSettings, stockSegment, stockSettings } from "./segments/stock";
 
 /**
- * Another statusline: renders the registered segments as one widget line
- * below the editor. Replaces the built-in `path`, `git` and `pr` status-line
+ * Another statusline: renders the registered segments as one line; the
+ * render surface is configurable (status by default, widget below the
+ * editor). Replaces the built-in `path`, `git` and `pr` status-line
  * segments (remove those from `statusLine.leftSegments`).
  *
  * Layout: segment order and per-segment max/min widths are configurable via
@@ -22,10 +23,12 @@ import { applyStockSettings, stockSegment, stockSettings } from "./segments/stoc
  * config file the built-in defaults apply. Weather (location, label
  * language) and stock (symbol, name) settings follow the same precedence
  * (env vars > YAML > built-in defaults; see README). The rightmost entry
- * shrinks first when the line is too wide. Two spaces between segments. The
- * line must fit one terminal row: segments shrink rightmost first, down to
- * their min width, then below min (floor 1), until it fits. The budget
- * reserves 2 cells for omp's per-line widget padding (WIDGET_HPAD).
+ * shrinks first when the line is too wide. Segments join with a single
+ * space. The line must fit one terminal row: segments shrink rightmost
+ * first, down to their min width, then below min (floor 1), until it fits.
+ * The widget surface reserves 2 cells for omp's per-line widget padding
+ * (WIDGET_HPAD); the status surface budgets the full `columns` (the host
+ * truncates with an ellipsis).
  *
  * Division of labor: index.ts owns the Segment contract, the loader config
  * and the assembly; core.ts keeps the segment-agnostic machinery (width
@@ -134,8 +137,23 @@ export function resolveBounds(seg: Segment, opt: SegmentOption | undefined): { m
 }
 
 const WIDGET_KEY = "another-statusline";
-const SEPARATOR = "  ";
+const SEPARATOR = " ";
 const RESIZE_DEBOUNCE_MS = 300;
+const ENV_SURFACE = "ANOTHER_SURFACE";
+
+export type RenderSurface = "status" | "widget";
+
+export const DEFAULT_SURFACE: RenderSurface = "status";
+
+/** Render surface: env `ANOTHER_SURFACE` > YAML `surface` > default;
+ * case/trim-insensitive match, blank or unknown falls back to the default. */
+export function surfaceSettings(raw: unknown, env: Record<string, string | undefined>): RenderSurface {
+	const parse = (v: unknown): RenderSurface | undefined => {
+		const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+		return s === "status" || s === "widget" ? s : undefined;
+	};
+	return parse(env[ENV_SURFACE]) ?? parse(raw) ?? DEFAULT_SURFACE;
+}
 
 // Segment registry. Add a segment: drop segments/<id>.ts exporting a
 // `Segment`, import it here, add it to this list. Order = display order;
@@ -152,11 +170,7 @@ const CONFIG_PATH = join(
 
 export default function anotherStatusline(pi: ExtensionAPI): void {
 	const fail = (ctx: ExtensionContext, err: unknown): void => {
-		try {
-			if (ctx.hasUI) ctx.ui.setWidget(WIDGET_KEY, undefined);
-		} catch {
-			// clearing the widget must never throw
-		}
+		clear(ctx);
 		const short = err instanceof Error ? err.message : String(err);
 		const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
 		try {
@@ -176,6 +190,11 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 	};
 
 	const clear = (ctx: ExtensionContext): void => {
+		try {
+			if (ctx.hasUI) ctx.ui.setStatus(WIDGET_KEY, undefined);
+		} catch {
+			// shutdown cleanup must not throw
+		}
 		try {
 			if (ctx.hasUI) ctx.ui.setWidget(WIDGET_KEY, undefined);
 		} catch {
@@ -233,7 +252,9 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 		return raw as Record<string, unknown>;
 	};
 
-	// Re-renders the widget with the last context; no-op after shutdown.
+	// Re-renders the line with the last context; no-op after shutdown. The
+	// status surface repaints at the next host render, the widget surface
+	// immediately.
 	const rerender = (): void => {
 		const c = lastCtx;
 		if (c) void refresh(c).catch((err) => fail(c, err));
@@ -252,6 +273,7 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 			const cfg = parseLoaderConfig(raw ?? {});
 			applyWeatherSettings(weatherSettings(raw?.weather, process.env));
 			applyStockSettings(stockSettings(raw?.stock, process.env));
+			const surface = surfaceSettings(raw?.surface, process.env);
 			const ordered = resolveSegments(SEGMENTS, cfg);
 			for (const id of cfg?.segments ?? []) {
 				if (!ordered.some((s) => s.id === id)) logConfigError(new Error(`unknown segment id: ${id}`), false);
@@ -275,6 +297,7 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 				}),
 				termWidth,
 				SEPARATOR,
+				surface === "widget" ? WIDGET_HPAD : 0,
 			);
 			const line = parts
 				.map((t, i) => {
@@ -284,7 +307,17 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 					return href.kind === "file" ? fileHyperlink(href.target, t) : urlHyperlink(href.target, t);
 				})
 				.join(SEPARATOR);
-			ctx.ui.setWidget(WIDGET_KEY, [line], { placement: "belowEditor" });
+			if (!line) {
+				clear(ctx);
+				return;
+			}
+			if (surface === "widget") {
+				ctx.ui.setWidget(WIDGET_KEY, [line], { placement: "belowEditor" });
+				ctx.ui.setStatus(WIDGET_KEY, undefined);
+			} else {
+				ctx.ui.setStatus(WIDGET_KEY, line);
+				ctx.ui.setWidget(WIDGET_KEY, undefined);
+			}
 		} catch (err) {
 			fail(ctx, err);
 		} finally {
@@ -302,14 +335,15 @@ export default function anotherStatusline(pi: ExtensionAPI): void {
 	};
 
 	// Background segments (weather, stock) start their unref'd timers; their
-	// rerender re-renders the widget when fresh data lands.
+	// rerender re-renders the line when fresh data lands (the status surface
+	// repaints at the next host render, the widget surface immediately).
 	for (const s of SEGMENTS) s.start?.(rerender);
 
-	// omp repaints widget lines at the new width but never re-runs this
-	// extension, so the line would stay sized for the old width until the
-	// next event. SIGWINCH arrives in bursts while dragging; one trailing
-	// rerender after the burst settles is enough (refresh() re-reads
-	// stdout.columns, which is updated before the event fires).
+	// On resize the host re-truncates status lines at the new width but never
+	// re-runs this extension, so the line would stay budgeted for the old
+	// width until the next event. SIGWINCH arrives in bursts while dragging;
+	// one trailing rerender after the burst settles is enough (refresh()
+	// re-reads stdout.columns, which is updated before the event fires).
 	let resizeTimer: NodeJS.Timeout | undefined;
 	process.stdout.on("resize", () => {
 		clearTimeout(resizeTimer);
