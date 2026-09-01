@@ -1,6 +1,6 @@
 {
   "name": "omp-herdr-tab-title",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "devDependencies": {
     "@oh-my-pi/pi-coding-agent": "18.0.10",

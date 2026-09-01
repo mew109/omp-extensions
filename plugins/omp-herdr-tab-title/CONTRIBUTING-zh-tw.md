@@ -17,7 +17,7 @@
 ## e2e 煙霧測試
 
 1. 把 repo 註冊成 marketplace 並安裝:`omp plugin marketplace add <path-to-repo> && omp plugin install omp-herdr-tab-title@omp-extensions`。
-2. 在 herdr 分頁內的暫存目錄跑 `omp`,送一個 prompt,等回合結束。自動標題會在約 15 秒內出現;用 `herdr tab get $HERDR_TAB_ID` 確認 `label` 等於 session 標題的前 12 顯示欄以內。
+2. 在 herdr 分頁內的暫存目錄跑 `omp`,送一個 prompt,等回合結束。自動標題會在約 15 秒內出現;用 `herdr tab get $HERDR_TAB_ID` 確認 `label` 等於 session 標題的前 15 顯示欄以內,標題更長時尾端帶 `…`。
 3. 離開後在同一分頁跑 `omp --continue`:啟動當下就會設好標籤,不需要任何 prompt。
 4. 在 herdr 外(`env -u HERDR_TAB_ID`)確認什麼都不會發生:`~/.omp/logs/` 沒有 `omp-herdr-tab-title` 字樣。
 5. 測完解除安裝,保持機器乾淨。

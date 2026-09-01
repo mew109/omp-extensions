@@ -2,22 +2,26 @@ import { describe, expect, test } from "bun:test";
 import { abbreviateSessionName, herdrSpawnTarget } from "./core";
 
 describe("abbreviateSessionName", () => {
-	test("pure ASCII long name is cut to 12 columns", () => {
+	test("pure ASCII long name is cut to 15 columns with ellipsis", () => {
 		const out = abbreviateSessionName("Fix the login page render bug");
-		expect(out).toBe("Fix the logi");
-		expect(Bun.stringWidth(out)).toBe(12);
+		expect(out).toBe("Fix the login p…");
+		expect(Bun.stringWidth(out)).toBe(16);
 	});
 
-	test("CJK name yields fewer than 12 chars", () => {
+	test("CJK name is cut to 15 columns with ellipsis", () => {
 		const out = abbreviateSessionName("重構狀態列寬度處理");
-		expect(Bun.stringWidth(out)).toBeLessThanOrEqual(12);
-		expect(out.length).toBeLessThan(12);
-		expect("重構狀態列".startsWith(out.slice(0, -1))).toBe(true);
+		expect(out).toBe("重構狀態列寬度…");
+		expect(Bun.stringWidth(out)).toBe(15);
+		expect(Bun.stringWidth(out)).toBeLessThanOrEqual(16);
 	});
 
-	test("mixed CJK and ASCII stays within 12 columns", () => {
+	test("mixed CJK and ASCII stays within 16 columns", () => {
 		const out = abbreviateSessionName("fix 重構狀態列 width bug");
-		expect(Bun.stringWidth(out)).toBeLessThanOrEqual(12);
+		expect(Bun.stringWidth(out)).toBeLessThanOrEqual(16);
+	});
+
+	test("short title passes through without ellipsis", () => {
+		expect(abbreviateSessionName("Fix the login")).toBe("Fix the login");
 	});
 
 	test("collapses whitespace", () => {
@@ -34,10 +38,10 @@ describe("abbreviateSessionName", () => {
 	});
 
 	test("excludes a wide cluster that would exceed the limit", () => {
-		// 5 CJK chars = 10 columns; a 6th would land at 12... 7th would be 14.
-		const out = abbreviateSessionName("一二三四五六七");
-		expect(Bun.stringWidth(out)).toBe(12);
-		expect(out).toBe("一二三四五六");
+		// 7 CJK chars = 14 columns; the 8th would land at 16.
+		const out = abbreviateSessionName("一二三四五六七八");
+		expect(Bun.stringWidth(out)).toBe(15);
+		expect(out).toBe("一二三四五六七…");
 	});
 
 	test("all control/whitespace returns empty string", () => {
@@ -45,7 +49,7 @@ describe("abbreviateSessionName", () => {
 	});
 
 	test("custom maxColumns", () => {
-		expect(abbreviateSessionName("abcdefghij", 4)).toBe("abcd");
+		expect(abbreviateSessionName("abcdefghij", 4)).toBe("abcd…");
 	});
 });
 
