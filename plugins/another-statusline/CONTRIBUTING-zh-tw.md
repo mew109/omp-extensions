@@ -33,7 +33,8 @@
 | 常數 | 位置 | 預設 | 作用 |
 |---|---|---|---|
 | `SEGMENTS` | index.ts | 五段陣列 | 內建預設註冊表(使用者端由 `another-statusline.yml` 覆蓋順序與寬度,見 README-zh-tw 的「設定」) |
-| `SEPARATOR` | index.ts | 兩格空格 | 段間分隔 |
+| `SEPARATOR` | index.ts | 一格空格 | 段間分隔 |
+| `DEFAULT_SURFACE` | index.ts | `"status"` | 內建渲染面;執行期優先序為 env `ANOTHER_SURFACE` > YAML `surface` > 此值(`surfaceSettings`) |
 | `ERROR_LOG` | core.ts | `<os.tmpdir()>/another-statusline-errors.log` | 錯誤日誌位置 |
 | `DEFAULT_WEATHER` | segments/weather.ts | `{ location: "Taipei", lang: "zh" }` | 天氣內建預設;執行期優先序為 env `ANOTHER_WEATHER_LOCATION` / `ANOTHER_WEATHER_LANG` > YAML `weather.location` / `weather.lang` > 此值(`weatherSettings` / `applyWeatherSettings` 同檔)。注意:「下個整點」以本機時區計算,而 API 回傳地點時區(`timezone=auto`),兩者不同時會選錯時隙 |
 | `WEATHER_REFRESH_MS` | segments/weather.ts | 30 分 | 天氣重取間隔 |

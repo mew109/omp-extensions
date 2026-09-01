@@ -35,7 +35,8 @@ For maintainers and anyone changing the code: file layout, how to add a segment,
 | Constant | Location | Default | Purpose |
 |---|---|---|---|
 | `SEGMENTS` | index.ts | five-segment array | built-in default registry (the user side overrides order and widths via `another-statusline.yml`; see "Configuration" in the README) |
-| `SEPARATOR` | index.ts | two spaces | divider between segments |
+| `SEPARATOR` | index.ts | one space | divider between segments |
+| `DEFAULT_SURFACE` | index.ts | `"status"` | built-in render surface; precedence is env `ANOTHER_SURFACE` > YAML `surface` > this value (`surfaceSettings`) |
 | `ERROR_LOG` | core.ts | `<os.tmpdir()>/another-statusline-errors.log` | error log location |
 | `DEFAULT_WEATHER` | segments/weather.ts | `{ location: "Taipei", lang: "zh" }` | built-in weather default; runtime precedence is env `ANOTHER_WEATHER_LOCATION` / `ANOTHER_WEATHER_LANG` > YAML `weather.location` / `weather.lang` > this value (`weatherSettings` / `applyWeatherSettings` live in the same file). Note: the "next full hour" is computed in local time while the API returns the location's timezone (`timezone=auto`); when the two differ, the wrong slot gets picked |
 | `WEATHER_REFRESH_MS` | segments/weather.ts | 30 min | weather refetch interval |

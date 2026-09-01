@@ -2,7 +2,7 @@
 
 English | [繁體中文](README-zh-tw.md)
 
-Merges the built-in `path`, `git`, and `pr` statusline segments into one widget (plus an Open-Meteo weather segment and a Yahoo stock segment), shown below the editor. The first three are **rewritten from the omp built-in renderers** (path = mpi, git = cpi, pr = dpi; format and truncation verified in 2026-08 against the installed @oh-my-pi/pi-coding-agent bundle); weather and stock are original to this extension.
+Merges the built-in `path`, `git`, and `pr` statusline segments into one line (plus an Open-Meteo weather segment and a Yahoo stock segment). The render surface is configurable: `status` (default) renders below the built-in status bar, `widget` below the editor. The first three are **rewritten from the omp built-in renderers** (path = mpi, git = cpi, pr = dpi; format and truncation verified in 2026-08 against the installed @oh-my-pi/pi-coding-agent bundle); weather and stock are original to this extension.
 
 ## Install
 
@@ -13,7 +13,7 @@ Merges the built-in `path`, `git`, and `pr` statusline segments into one widget 
 
 ## Display
 
-Two spaces separate segments. The `segments` config key sets the order (without a config file, the `SEGMENTS` default in `index.ts` applies: `path` → `git` → `pr` → `weather` → `stock`; the rightmost segment shrinks first):
+A single space separates segments. The `segments` config key sets the order (without a config file, the `SEGMENTS` default in `index.ts` applies: `path` → `git` → `pr` → `weather` → `stock`; the rightmost segment shrinks first):
 
 - **path**: folder icon + path.
   - Scratch paths (`os.tmpdir()`, `~/tmp`; on Windows also TEMP / TMP / SystemRoot\Temp): shown as a relative path with the scratch icon.
@@ -32,15 +32,15 @@ Two spaces separate segments. The `segments` config key sets the order (without 
   - Change and percent carry a sign, thousands separators, and two decimals; the baseline is the previous close, intraday values use the latest price.
   - Before the day's first trade in the exchange's timezone — weekends, holidays, or pre-market — only `💤 <index> <value>` shows, without change data (the last trade was not today).
 
-A segment hides when its data is missing (not a git repo, no PR, no weather, no stock data); path always shows. When every segment hides, the widget clears.
+A segment hides when its data is missing (not a git repo, no PR, no weather, no stock data); path always shows. When every segment hides, the line clears.
 
 ## Width
 
 The whole line must fit one row. When too wide, segments shrink from the rightmost (`SEGMENTS` tail): first down to each segment's min, then below min (floor 1), moving left until the line fits. Cell budgets per segment (max / min live in each segment file):
 
-The width budget reserves 2 cells for the widget's own per-line padding — omp renders each `setWidget` line inside `Text(line, 1, 0)`, so the content area is `columns − 2` (`tui.tight` removes the padding; those users simply get 2 spare cells). Widths are measured per grapheme cluster with `Bun.stringWidth`, the same engine the renderer wraps with: emoji + VS16 = 2 cells, `⛅`/`➖` = 2, tab = 3. This fixes undercounts that could wrap the line onto a second row on narrow terminals.
+The width budget depends on the render surface: on the `widget` surface, omp renders each `setWidget` line inside `Text(line, 1, 0)`, so the content area is `columns − 2` (`tui.tight` removes the padding; those users simply get 2 spare cells); on the `status` surface the line budgets the full `columns` and the host truncates it with an ellipsis. Widths are measured per grapheme cluster with `Bun.stringWidth`, the same engine the renderer wraps with: emoji + VS16 = 2 cells, `⛅`/`➖` = 2, tab = 3. This fixes undercounts that could wrap the line onto a second row on narrow terminals.
 
-    path     max 48  min 24   (segments/path.ts, keeps the tail)
+    path     max 40  min 24   (segments/path.ts, keeps the tail)
     git      max 36  min 20   (segments/git.ts)
     pr       max 30  min 10   (segments/pr.ts)
     weather  max 39  min 20   (segments/weather.ts)
@@ -63,27 +63,29 @@ Reorder, hide, resize segments, and set the weather / stock targets without touc
     $PI_CODING_AGENT_DIR/another-statusline.yml
     (without the env var: ~/.omp/agent/another-statusline.yml)
 
-YAML (JSON also valid), schema modeled on omp's built-in `statusLine`:
+YAML (JSON also valid), schema modeled on omp's built-in `statusLine`; the values below are the built-in defaults:
 
     segments: [path, git, pr, weather, stock]   # order = display order (tail shrinks first)
-    segmentOptions:
-      path: { max: 40, min: 10 }
-      git: { max: 30, min: 8 }
-    weather:
-      location: Tokyo        # place name; geocoded automatically
-      lang: zh               # label language: zh / en
-    stock:
-      symbol: ^TWII          # Yahoo ticker
-      name: TAIEX            # display name (optional)
+    surface: status                             # render surface: status (below the built-in status bar) / widget (below the editor)
+    segmentOptions:                             # per-segment width bounds, cells
+      path:    { max: 40, min: 24 }
+      git:     { max: 36, min: 20 }
+      pr:      { max: 30, min: 10 }
+      weather: { max: 39, min: 20 }
+      stock:   { max: 38, min: 20 }
+    weather: { location: Tokyo, lang: zh }      # place name (geocoded) / label language zh or en
+    stock:   { symbol: "^TWII", name: TAIEX }   # Yahoo ticker / display name
 
 Semantics:
 
 - `segments`: **replaces the whole list** — only the listed ids show, in the given order; unlisted ids hide (this is how you turn a segment off); unknown ids are ignored and logged; an empty array or a missing `segments` falls back to the built-in default list. The ids are the five segments from "Display": `path` / `git` / `pr` / `weather` / `stock`.
-- `segmentOptions.<id>.max` / `min`: positive integers (≥1) with min ≤ max after the merge; an invalid single field is dropped and the built-in value applies; min > max drops both fields for that segment. Keys without a matching segment are ignored.
+- `surface`: the render surface, `status` or `widget` (default `status`); matched case-insensitively after trimming — a blank or unknown value falls back to the default. The `ANOTHER_SURFACE` environment variable overrides.
+- Surface behavior — `status`: one line per extension key, ordered alphabetically by key (stable across updates), rendered below the built-in status bar; the host strips ANSI/OSC escapes, collapses whitespace runs, and truncates with an ellipsis at terminal width; the line repaints at the next host render, so a background poller update can appear one keypress late. `widget`: rendered between editor and status bar (`belowEditor` placement), repaints immediately; with several widget extensions the order follows update recency.
+- `segmentOptions.<id>.max` / `min`: per-segment width bounds in cells; every segment id (`path` / `git` / `pr` / `weather` / `stock`) accepts them. Positive integers (≥1), min ≤ max after the merge; an invalid single field is dropped and the built-in value applies; min > max drops both fields for that segment (falls back to the built-ins). Keys without a matching segment are ignored.
 - `weather.location`: the weather city as a **place name** (default `Taipei`). Names are geocoded to coordinates via Open-Meteo's geocoding API — same provider as the forecast, no key — with `count=1`, so the geocoder's first match wins; one result per name is cached for the process lifetime, and the default city ships built-in coordinates, so it never calls the geocoder. A geocoding failure (unknown name, network error) hides the segment and logs one error line.
 - `weather.lang`: label language, `zh` or `en` (default `zh`); matched case-insensitively after trimming — any other value is dropped and falls back.
 - `stock.symbol` / `stock.name`: the Yahoo ticker and its display name (default `^TWII` / `TAIEX`). With a custom symbol but no `name`, the symbol labels itself (e.g. `7203.T`); the default keeps `TAIEX`.
-- Environment variables override the file per key, and the file overrides the built-ins (**env > YAML > built-in**): `ANOTHER_WEATHER_LOCATION`, `ANOTHER_WEATHER_LANG`, `ANOTHER_STOCK_SYMBOL`, `ANOTHER_STOCK_NAME`. Blank values count as unset; values are trimmed.
+- Environment variables override the file per key, and the file overrides the built-ins (**env > YAML > built-in**): `ANOTHER_WEATHER_LOCATION`, `ANOTHER_WEATHER_LANG`, `ANOTHER_STOCK_SYMBOL`, `ANOTHER_STOCK_NAME`, `ANOTHER_SURFACE`. Blank values count as unset; values are trimmed.
 - **Saving applies immediately**: every redraw (session_start / session_switch / turn_end / terminal resize / background data landing) re-reads the file; no restart. A changed location / symbol drops the cached data, so the segment hides until the new target's data lands (never the old city / index); a refetch right after a failed attempt still respects the attempt floor (weather 10 min, stock 60 s).
 - Missing file → defaults, silently. Read failure (other than missing) or parse failure → defaults + one line in the error log under the OS tmp dir (`os.tmpdir()`), `another-statusline-errors.log`, + one error notification per process.
 - The weather / stock background pollers ignore the `segments` filter: all of them stay started, so data stays cached and re-enabling is instant.

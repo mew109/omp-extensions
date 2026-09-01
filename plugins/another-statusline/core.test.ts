@@ -57,6 +57,10 @@ describe("buildStatusLine", () => {
 		const parts = buildStatusLine(segs, 60);
 		expect(displayWidth(parts.join("  "))).toBeLessThanOrEqual(58);
 	});
+	test("status surface (hpad 0): joined width fits the full 60 columns", () => {
+		const parts = buildStatusLine(segs, 60, "  ", 0);
+		expect(displayWidth(parts.join("  "))).toBeLessThanOrEqual(60);
+	});
 	test("30-col terminal: still one row", () => {
 		const parts = buildStatusLine(segs, 30);
 		expect(displayWidth(parts.join("  "))).toBeLessThanOrEqual(28);

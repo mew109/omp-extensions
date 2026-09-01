@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseLoaderConfig, resolveBounds, resolveSegments, type Segment } from "./index";
+import { parseLoaderConfig, resolveBounds, resolveSegments, surfaceSettings, type Segment } from "./index";
 
 const seg = (id: string): Segment => ({ id, max: 30, min: 8, render: () => null });
 const all = ["path", "git", "pr"].map(seg);
@@ -48,5 +48,29 @@ describe("resolveBounds", () => {
 	});
 	test("min > max falls back to both built-ins", () => {
 		expect(resolveBounds(seg("git"), { max: 5, min: 40 })).toEqual({ max: 30, min: 8 });
+	});
+});
+
+describe("surfaceSettings", () => {
+	test("no YAML, no env -> status", () => {
+		expect(surfaceSettings(undefined, {})).toBe("status");
+	});
+	test("YAML surface alone is honored", () => {
+		expect(surfaceSettings("widget", {})).toBe("widget");
+	});
+	test("env overrides YAML", () => {
+		expect(surfaceSettings("widget", { ANOTHER_SURFACE: "status" })).toBe("status");
+	});
+	test("blank env counts as unset", () => {
+		expect(surfaceSettings("widget", { ANOTHER_SURFACE: "  " })).toBe("widget");
+	});
+	test("matches case-insensitively after trimming", () => {
+		expect(surfaceSettings(undefined, { ANOTHER_SURFACE: " Widget " })).toBe("widget");
+	});
+	test("unknown value falls back to the default", () => {
+		expect(surfaceSettings("sidebar", {})).toBe("status");
+	});
+	test("non-string YAML value falls back to the default", () => {
+		expect(surfaceSettings(42, {})).toBe("status");
 	});
 });
