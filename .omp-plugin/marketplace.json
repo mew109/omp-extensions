@@ -4,7 +4,7 @@
     "name": "mew"
   },
   "metadata": {
-    "description": "Personal omp plugins: another-statusline, code-mode, dump-as-curl, omp-cc-user, omp-herdr-tab-title, omp-segments-to-widgets"
+    "description": "Personal omp plugins: another-statusline, code-mode, dump-as-curl, omp-cc-user, omp-herdr-tab-title, omp-collab-notify, omp-segments-to-widgets"
   },
   "plugins": [
     {
@@ -54,6 +54,14 @@
       "category": "development",
       "license": "MIT",
       "source": "./plugins/omp-segments-to-widgets"
+    },
+    {
+      "name": "omp-collab-notify",
+      "description": "Telegram notify on new collab rooms; auto-rehost relay-aborted rooms with new-link notification",
+      "version": "0.1.0",
+      "category": "productivity",
+      "license": "MIT",
+      "source": "./plugins/omp-collab-notify"
     }
   ]
 }
