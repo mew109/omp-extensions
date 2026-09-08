@@ -12,6 +12,7 @@
 | omp-cc-user | 管理哪些個人 `~/.claude` 資源(skills、plugins、slash commands、mcp servers)在 omp 顯示 | skill + slash command |
 | omp-herdr-tab-title | 把目前的 herdr 分頁改名為 omp session 標題(最多 15 顯示欄 + `…`);不在 herdr 環境時不做任何事 | extension |
 | omp-segments-to-widgets | 把 OMP 狀態列段改成安全、寬度感知的 extension widgets 的程序 | skill |
+| omp-collab-notify | 當 /collab 房間開啟時送出 Telegram 通知;可選:relay 中斷房間時自動重開並通知新連結 | extension |
 
 Windows 支援仍屬實驗性:僅由 `check-windows` CI job 驗證,尚未在實機 Windows 上測試。
 
@@ -23,6 +24,7 @@ Windows 支援仍屬實驗性:僅由 `check-windows` CI job 驗證,尚未在實�
     omp plugin install dump-as-curl@omp-extensions
     omp plugin install omp-cc-user@omp-extensions
     omp plugin install omp-herdr-tab-title@omp-extensions
+    omp plugin install omp-collab-notify@omp-extensions
     omp plugin install omp-segments-to-widgets@omp-extensions
 
 本機開發時改用 repo 路徑:`omp plugin marketplace add <path-to-repo>`。
