@@ -4,7 +4,7 @@
     "name": "mew"
   },
   "metadata": {
-    "description": "Personal omp plugins: another-statusline, code-mode, dump-as-curl, omp-cc-user, omp-herdr-tab-title, omp-collab-notify, omp-segments-to-widgets"
+    "description": "Personal omp plugins: another-statusline, code-mode, dump-as-curl, omp-cc-user, omp-herdr-tab-title, omp-collab-notify, omp-pii-mask, omp-segments-to-widgets"
   },
   "plugins": [
     {
@@ -62,6 +62,14 @@
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/omp-collab-notify"
+    },
+    {
+      "name": "omp-pii-mask",
+      "description": "Mask PII before it reaches the LLM and restore it in tool calls and replies (/pii-map)",
+      "version": "0.1.0",
+      "category": "productivity",
+      "license": "MIT",
+      "source": "./plugins/omp-pii-mask"
     }
   ]
 }
