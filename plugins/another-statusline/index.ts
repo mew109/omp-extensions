@@ -3,7 +3,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import { fileHyperlink, urlHyperlink } from "@oh-my-pi/pi-coding-agent/tui";
+// Import from a host-served surface: omp's extension loader only rewrites
+// package-root/subpath keys it bundles, so subpaths resolved from the plugin's
+// stale node_modules copy break on omp upgrades (18.2.x moved the TUI out of
+// pi-coding-agent entirely).
+import { fileHyperlink, urlHyperlink } from "@oh-my-pi/pi-tui/render";
 
 import { buildStatusLine, ERROR_LOG, WIDGET_HPAD } from "./core";
 import { pathSegment } from "./segments/path";
