@@ -11,6 +11,8 @@ Merges the built-in `path`, `git`, and `pr` statusline segments into one line (p
 
 (For local development, use the repo path in `marketplace add`.)
 
+Works on omp 18.1.x and 18.2.x: the OSC 8 helpers load from whichever surface the running omp ships, and segments render as plain text when neither is available.
+
 ## Display
 
 A single space separates segments. The `segments` config key sets the order (without a config file, the `SEGMENTS` default in `index.ts` applies: `path` → `git` → `pr` → `weather` → `stock`; the rightmost segment shrinks first):

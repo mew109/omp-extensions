@@ -3,13 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-// Import from a host-served surface: omp's extension loader only rewrites
-// package-root/subpath keys it bundles, so subpaths resolved from the plugin's
-// stale node_modules copy break on omp upgrades (18.2.x moved the TUI out of
-// pi-coding-agent entirely).
-import { fileHyperlink, urlHyperlink } from "@oh-my-pi/pi-tui/render";
-
 import { buildStatusLine, ERROR_LOG, WIDGET_HPAD } from "./core";
+import { fileHyperlink, initHyperlinks, urlHyperlink } from "./hyperlinks";
 import { pathSegment } from "./segments/path";
 import { gitSegment } from "./segments/git";
 import { prSegment } from "./segments/pr";
@@ -173,6 +168,7 @@ const CONFIG_PATH = join(
 );
 
 export default function anotherStatusline(pi: ExtensionAPI): void {
+	initHyperlinks();
 	const fail = (ctx: ExtensionContext, err: unknown): void => {
 		clear(ctx);
 		const short = err instanceof Error ? err.message : String(err);

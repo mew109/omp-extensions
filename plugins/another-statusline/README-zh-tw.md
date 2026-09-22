@@ -10,6 +10,8 @@
 
 (本機開發時,`marketplace add` 改用 repo 路徑。)
 
+支援 omp 18.1.x 與 18.2.x:OSC 8 hyperlink 輔助函式會從執行中 omp 實際提供的 surface 載入,兩者皆無時各段以純文字渲染。
+
 ## 顯示
 
 各段以一格空格分隔,順序由設定檔 `segments` 決定(無設定檔時用 `index.ts` 的 `SEGMENTS` 預設:`path` → `git` → `pr` → `weather` → `stock`;最尾端的段最先縮):
