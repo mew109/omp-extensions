@@ -10,6 +10,9 @@ User-facing docs (config, bot setup, behavior) are in [README.md](README.md).
 - `core.ts` — pure logic, no omp imports: config parsing, message
   building, Telegram send
 - `core.test.ts` — `bun test` unit tests over `core.ts`
+- `keepalive.ts` — the `/collab-keepalive` command line: collab link
+  parsing, wire framing, detached ping daemon
+- `keepalive.test.ts` — `bun test` unit tests over the protocol lib
 - `package.json` — declares the entry: `"omp": { "extensions":
   ["./index.ts"] }`
 
@@ -19,6 +22,10 @@ User-facing docs (config, bot setup, behavior) are in [README.md](README.md).
 bun install                        # in plugins/omp-collab-notify
 bun test plugins/omp-collab-notify # from repo root
 bunx tsc --noEmit -p plugins/omp-collab-notify
+# keepalive live e2e (needs a real room link)
+bun plugins/omp-collab-notify/keepalive.ts start '<link>'    # expect "joined room …" within 10 s
+sleep 130 && grep -c ' ping$' /tmp/omp-collab-keepalive-<roomId>.log  # ≥ 2
+bun plugins/omp-collab-notify/keepalive.ts stop '<link>'
 ```
 
 Then the install smoke test from AGENTS.md:
@@ -40,6 +47,11 @@ omp plugin uninstall omp-collab-notify@omp-extensions
   to `getUpdates`, so this log is the delivery record.
 - The rehost path always opens a writable room, even if the lost room
   was view-only.
+- `keepalive.ts` ports omp's collab wire protocol from the 18.4.9
+  binary (proto 3, AES-GCM 12-byte IV, 4-byte big-endian peerId
+  envelope, `/r/<roomId>?role=guest`). If joins fail with a
+  `protocol mismatch` host error, re-extract the constants from the
+  current omp binary.
 
 ## Release
 

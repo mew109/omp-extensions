@@ -9,6 +9,9 @@
 - `index.ts` — omp 接線:`/collab` spec 包裝、中斷輪詢、重開迴圈
 - `core.ts` — 純邏輯,不 import omp:設定解析、訊息組字、Telegram 發送
 - `core.test.ts` — `bun test` 對 `core.ts` 的單元測試
+- `keepalive.ts` — `/collab-keepalive` 命令列:collab 連結解析、
+  wire framing、分離的 ping daemon
+- `keepalive.test.ts` — 對 protocol lib 的 `bun test` 單元測試
 - `package.json` — 宣告進入點:`"omp": { "extensions":
   ["./index.ts"] }`
 
@@ -18,6 +21,10 @@
 bun install                        # 在 plugins/omp-collab-notify
 bun test plugins/omp-collab-notify # 自 repo 根目錄
 bunx tsc --noEmit -p plugins/omp-collab-notify
+# keepalive 即時 e2e(需要真實房間連結)
+bun plugins/omp-collab-notify/keepalive.ts start '<link>'    # 10 秒內應出現 "joined room …"
+sleep 130 && grep -c ' ping$' /tmp/omp-collab-keepalive-<roomId>.log  # ≥ 2
+bun plugins/omp-collab-notify/keepalive.ts stop '<link>'
 ```
 
 再跑 AGENTS.md 的安裝煙霧測試:
@@ -37,6 +44,10 @@ omp plugin uninstall omp-collab-notify@omp-extensions
   `/tmp/omp-collab-notify-errors.log` — bot 發送的訊息無法從
   `getUpdates` 看到,這個 log 就是送達紀錄。
 - 重開路徑一律開可寫入房間,即使中斷前是唯讀房間。
+- `keepalive.ts` 的 wire protocol 常數移植自 omp 18.4.9 binary
+  (proto 3、AES-GCM 12 位元組 IV、4 位元組 big-endian peerId
+  envelope、`/r/<roomId>?role=guest`)。若 join 失敗並出現
+  `protocol mismatch` host error,需從當前 omp binary 重新萃取常數。
 
 ## 發版
 

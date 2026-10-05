@@ -5,8 +5,9 @@ import type {
 	SlashCommandSpec,
 	TuiSlashCommandRuntime,
 } from "@oh-my-pi/pi-coding-agent/slash-commands/types";
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@oh-my-pi/pi-coding-agent";
 import { appendFileSync } from "node:fs";
+import { join } from "node:path";
 import { buildRehostFailedMessage, buildRoomMessage, ERROR_LOG, loadConfig, sendTelegramMessage } from "./core";
 
 function parseSubcommand(args: string): { verb: string; rest: string } {
@@ -23,6 +24,25 @@ function logError(message: string): void {
 		// logging must never throw
 	}
 }
+
+/** TUI: ui.notify. Headless: stdout — same report path dump-as-curl uses. */
+function report(
+	ctx: Pick<ExtensionCommandContext, "hasUI" | "ui">,
+	msg: string,
+	level: "info" | "warning" | "error",
+): void {
+	if (ctx.hasUI) {
+		ctx.ui.notify(msg, level);
+	} else {
+		process.stdout.write(msg + "\n");
+	}
+}
+
+const KEEPALIVE_USAGE = `omp-collab-keepalive: keep a collab room alive with a pinging read-only guest
+
+/collab-keepalive <link> [--interval ms] [--jitter ms] [--name s]   start (verb optional)
+/collab-keepalive stop <link|roomId|all>
+/collab-keepalive status [link|roomId]`;
 
 const WARN_PREFIX = "omp-collab-notify: ";
 const WARN_UNCONFIGURED = `${WARN_PREFIX}Telegram notification skipped — telegram.botToken / telegram.chatId are not set. Configure ~/.omp/agent/omp-collab-notify.yml or TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID.`;
@@ -133,6 +153,35 @@ export default function ompCollabNotify(pi: ExtensionAPI): void {
 		spec.handleTui = wrapped;
 		wrappedHandlers.add(spec);
 	}
+
+	pi.registerCommand("collab-keepalive", {
+		description: "Keep a collab room alive: start|stop|status a pinging guest for <link|id>",
+		handler: async (args, ctx) => {
+			const tokens = (args ?? "").trim().split(/\s+/).filter(Boolean);
+			if (tokens.length === 0) {
+				report(ctx, KEEPALIVE_USAGE, "info");
+				return;
+			}
+			if (!["start", "stop", "status", "help"].includes(tokens.at(0) ?? "")) tokens.unshift("start");
+			const bunBin = process.env.OMP_COLLAB_KEEPALIVE_BUN ?? "bun";
+			try {
+				const child = Bun.spawn([bunBin, join(import.meta.dir, "keepalive.ts"), ...tokens], {
+					stdout: "pipe",
+					stderr: "pipe",
+				});
+				const [out, err, code] = await Promise.all([
+					new Response(child.stdout).text(),
+					new Response(child.stderr).text(),
+					child.exited,
+				]);
+				const text = [out.trim(), err.trim()].filter(Boolean).join("\n") || `(no output, exit code ${code})`;
+				report(ctx, text, code === 0 ? "info" : "warning");
+			} catch (e) {
+				const message = e instanceof Error ? e.message : String(e);
+				report(ctx, `omp-collab-keepalive: cannot run ${bunBin}: ${message}`, "warning");
+			}
+		},
+	});
 
 	pi.on("session_start", (_event, ctx) => {
 		ctx.setInterval(() => {

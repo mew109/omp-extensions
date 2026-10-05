@@ -8,6 +8,6 @@
 		"skipLibCheck": true,
 		"types": ["node", "bun"]
 	},
-	"include": ["index.ts", "core.ts"],
+	"include": ["index.ts", "core.ts", "keepalive.ts"],
 	"exclude": ["**/*.test.ts"]
 }

@@ -12,7 +12,7 @@
 | omp-cc-user | 管理哪些個人 `~/.claude` 資源(skills、plugins、slash commands、mcp servers)在 omp 顯示 | skill + slash command |
 | omp-herdr-tab-title | 把目前的 herdr 分頁改名為 omp session 標題(最多 15 顯示欄 + `…`);不在 herdr 環境時不做任何事 | extension |
 | omp-segments-to-widgets | 把 OMP 狀態列段改成安全、寬度感知的 extension widgets 的程序 | skill |
-| omp-collab-notify | 當 /collab 房間開啟時送出 Telegram 通知;可選:relay 中斷房間時自動重開並通知新連結 | extension |
+| omp-collab-notify | 當 /collab 房間開啟時送出 Telegram 通知;可選:relay 中斷房間時自動重開並通知新連結;/collab-keepalive 以持續 ping 的訪客讓房間保持連線 | extension |
 | omp-pii-mask | 在資料送進 LLM 前遮罩 PII(email、API key、卡號等),並在工具呼叫與回覆中還原(/pii-map);電話號碼為選用 | extension |
 
 Windows 支援仍屬實驗性:僅由 `check-windows` CI job 驗證,尚未在實機 Windows 上測試。

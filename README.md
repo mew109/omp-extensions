@@ -11,7 +11,7 @@ A personal omp plugin marketplace, named `omp-extensions`. It contains the follo
 | dump-as-curl | Dump the last LLM request omp sent as an executable curl script (/dump-as-curl) | extension |
 | omp-cc-user | Manage which personal `~/.claude` resources (skills, plugins, slash commands, mcp servers) are visible in omp | skill + slash command |
 | omp-herdr-tab-title | Renames the current herdr tab to the omp session title (max 15 display columns + `…`); no-op outside herdr | extension |
-| omp-collab-notify | Telegram notification when a /collab room opens; optionally re-opens a relay-aborted room and notifies the new link | extension |
+| omp-collab-notify | Telegram notification when a /collab room opens; optionally re-opens a relay-aborted room and notifies the new link; /collab-keepalive keeps a room alive with a pinging guest | extension |
 | omp-pii-mask | Mask PII (emails, API keys, cards, …) before it reaches the LLM and restore it in tool calls and replies (/pii-map); phone numbers opt-in | extension |
 | omp-segments-to-widgets | Procedure for moving OMP status-line segments into safe, width-aware extension widgets | skill |
 
