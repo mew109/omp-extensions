@@ -2,7 +2,7 @@
 
 [English](README.md) | 繁體中文
 
-當 `/collab` 房間開啟時,以 Telegram 訊息送出新房間連結。可選:當 relay 中斷目前房間時自動重開新房間,並通知新連結。
+當 `/collab` 房間開啟時,以 Telegram 訊息送出新房間連結。可選:當 relay 中斷目前房間時自動重開新房間,並通知新連結。另附 `/collab-keepalive`,以持續 ping 的唯讀訪客讓房間保持連線。
 
 僅限 TUI。需要設定 `collab.relayUrl`(或在 `/collab` 後面帶上)。本 plugin 依賴 omp 目前的 `/collab` 內部實作,omp 大版本更新時可能需要調整。
 
@@ -39,6 +39,23 @@ collab:
        curl "https://api.telegram.org/bot<TOKEN>/getUpdates"
 
    讀取 `result[].message.chat.id`。群組聊天:把 bot 加進群組、在群組發一次言,使用負數的群組 id。也可用 `@userinfobot`。
+
+## 讓房間保持連線(`/collab-keepalive`)
+
+以名為 `keepalive` 的唯讀訪客加入房間,每 60 秒 ± 10 秒 ping 一次 relay,讓 relay / Cloudflare 的閒置逾時不會關閉房間。訪客會出現在 host 的參與者清單,但不會寫入——即使連結是完整連結,也永不送出 write token。
+
+    /collab-keepalive <link>
+    /collab-keepalive <link> --interval 30000 --jitter 5000 --name my-keeper
+    /collab-keepalive stop <link|roomId|all>
+    /collab-keepalive status [link|roomId]
+
+- `<link>`:網頁連結(`https://my.omp.sh/#<id>.<key>`)、`my.omp.sh/#<id>.<key>`、裸 `<id>.<key>`,或 `ws(s)://` relay URL。`stop` / `status` 也接受裸 `<roomId>`;`stop all` 停止所有 keeper。
+- 旗標單位為毫秒:`--interval`(預設 60000)、`--jitter`(預設 10000)、`--name`(預設 `keepalive`,裁剪至 64 字元)。
+- 檔案:`${TMPDIR}/omp-collab-keepalive-<roomId>.pid`(權限 600)與 `.log`(每個事件一行:加入、ping、斷線)。
+- 關閉代碼處理:4001(host 關閉房間)→ 以 0 結束;4004(房間不存在)→ 最多重試 5 次後放棄;4009 → 結束;4029 與其他 → 以 1–30 秒隨機退避重連。
+- 連結以環境變數傳給分離的 daemon,不放在命令列上,因此不會出現在 `ps` 輸出。
+- `OMP_COLLAB_KEEPALIVE_BUN` 覆寫用來啟動 daemon 的 `bun` 執行檔(預設:`PATH` 裡的 `bun`)。
+- 不經 omp、直接使用:`bun keepalive.ts start '<link>'`——與 slash command 同一個 CLI。
 
 ## 行為
 

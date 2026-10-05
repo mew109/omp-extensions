@@ -58,7 +58,7 @@
     {
       "name": "omp-collab-notify",
       "description": "Telegram notify on new collab rooms; auto-rehost relay-aborted rooms with new-link notification",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/omp-collab-notify"
