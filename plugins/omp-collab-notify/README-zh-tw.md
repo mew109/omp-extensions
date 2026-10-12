@@ -19,6 +19,7 @@ collab:
   autoRehost: true       # re-open a fresh room when the relay kills the current one
   rehostRetries: 2       # extra start attempts after the first rehost try
   rehostDelaySeconds: 5  # pause between rehost attempts
+  pollSeconds: 10        # seconds between loss polls; minimum 3
 ```
 
 環境變數 `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` 優先於 YAML。omp 會自動載入 `~/.omp/agent/.env`,適合放這兩個變數。空字串(環境變數或 YAML)視為未設定。設定檔修改後立即生效,不需重啟。
@@ -29,6 +30,7 @@ collab:
 | `collab.autoRehost` | `true` | relay 中斷房間時自動重開新房間。與 `notify` 互相獨立。 |
 | `collab.rehostRetries` | `2` | 第一次重試之後的額外嘗試次數。 |
 | `collab.rehostDelaySeconds` | `5` | 重試之間的間隔秒數。 |
+| `collab.pollSeconds` | `10` | 自動重開的中斷輪詢間隔秒數,最短 3 秒。session 開始時讀取一次,修改後需重啟 omp。 |
 
 ## Telegram bot 建立
 
@@ -52,7 +54,7 @@ collab:
 - `<link>`:網頁連結(`https://my.omp.sh/#<id>.<key>`)、`my.omp.sh/#<id>.<key>`、裸 `<id>.<key>`,或 `ws(s)://` relay URL。`stop` / `status` 也接受裸 `<roomId>`;`stop all` 停止所有 keeper。
 - 旗標單位為毫秒:`--interval`(預設 60000)、`--jitter`(預設 10000)、`--name`(預設 `keepalive`,裁剪至 64 字元)。
 - 檔案:`${TMPDIR}/omp-collab-keepalive-<roomId>.pid`(權限 600)與 `.log`(每個事件一行:加入、ping、斷線)。
-- 關閉代碼處理:4001(host 關閉房間)→ 以 0 結束;4004(房間不存在)→ 最多重試 5 次後放棄;4009 → 結束;4029 與其他 → 以 1–30 秒隨機退避重連。
+- 關閉代碼處理:任何斷線(4001 host 關閉房間、4004 房間不存在、網路錯誤等)都以 1–30 秒隨機指數退避重連,每次斷線事件最多重試 5 次;成功加入後計數歸零。5 次都失敗就在日誌印一行 `warning:` 並以 1 結束。4009(已有其他 host)仍立即結束。
 - 連結以環境變數傳給分離的 daemon,不放在命令列上,因此不會出現在 `ps` 輸出。
 - `OMP_COLLAB_KEEPALIVE_BUN` 覆寫用來啟動 daemon 的 `bun` 執行檔(預設:`PATH` 裡的 `bun`)。
 - 不經 omp、直接使用:`bun keepalive.ts start '<link>'`——與 slash command 同一個 CLI。
@@ -61,7 +63,7 @@ collab:
 
 - 房間開啟時(`/collab`、`/collab start`、`/collab view`)送出含 web + terminal 連結的 Telegram 訊息。唯讀房間使用唯讀連結。
 - 該通知時若 `telegram.botToken` / `telegram.chatId` 未設定,TUI 會出警告提醒設定。
-- 自動重開:relay 在非使用者操作下中斷房間(fatal 關閉——host 衝突、房間關閉/已滿/不存在)時,plugin 重開一間新的可寫入房間(新連結)並以 Telegram 通知新連結。`1 + rehostRetries` 次都失敗後改送失敗訊息。`/collab stop`、切換 session、結束程式都不會觸發。
+- 自動重開:輪詢偵測(預設 10 秒,`collab.pollSeconds`)relay 在非使用者操作下中斷房間(fatal 關閉——host 衝突、房間關閉/已滿/不存在)時,plugin 重開一間新的可寫入房間(新連結)並以 Telegram 通知新連結。`1 + rehostRetries` 次都失敗後改送失敗訊息。`/collab stop`、切換 session、結束程式都不會觸發。
 - 訪客模式(`/join`)不會通知。
 
 ## Session 進行中切換功能

@@ -46,7 +46,13 @@ describe("parseCollabConfig", () => {
 			autoRehost: true,
 			rehostRetries: 2,
 			rehostDelayMs: 5000,
+			pollMs: 10000,
 		});
+	});
+
+	test("pollSeconds converts to ms, clamped to a 3 s minimum", () => {
+		expect(parseCollabConfig({ collab: { pollSeconds: 30 } }, env({})).pollMs).toBe(30000);
+		expect(parseCollabConfig({ collab: { pollSeconds: 1 } }, env({})).pollMs).toBe(3000);
 	});
 
 	test("rehostDelaySeconds converts to ms", () => {
@@ -61,6 +67,7 @@ describe("parseCollabConfig", () => {
 		expect(cfg.notify).toBe(true);
 		expect(cfg.autoRehost).toBe(true);
 		expect(cfg.rehostRetries).toBe(2);
+		expect(cfg.pollMs).toBe(10000);
 	});
 
 
@@ -93,12 +100,13 @@ describe("loadConfig", () => {
 	test("valid YAML parsed", () => {
 		writeFileSync(
 			join(dir, "omp-collab-notify.yml"),
-			"telegram:\n  botToken: tok\n  chatId: \"7\"\ncollab:\n  notify: false\n  rehostDelaySeconds: 3\n",
+			"telegram:\n  botToken: tok\n  chatId: \"7\"\ncollab:\n  notify: false\n  rehostDelaySeconds: 3\n  pollSeconds: 12\n",
 		);
 		const cfg = loadConfig(env({}));
 		expect(cfg.telegram).toEqual({ botToken: "tok", chatId: "7" });
 		expect(cfg.notify).toBe(false);
 		expect(cfg.rehostDelayMs).toBe(3000);
+		expect(cfg.pollMs).toBe(12000);
 	});
 });
 

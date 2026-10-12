@@ -21,6 +21,7 @@ export interface CollabNotifyConfig {
 	autoRehost: boolean;
 	rehostRetries: number;
 	rehostDelayMs: number;
+	pollMs: number;
 }
 
 export const DEFAULT_CONFIG: CollabNotifyConfig = {
@@ -29,6 +30,7 @@ export const DEFAULT_CONFIG: CollabNotifyConfig = {
 	autoRehost: true,
 	rehostRetries: 2,
 	rehostDelayMs: 5000,
+	pollMs: 10_000,
 };
 
 function cleanString(value: unknown): string | undefined {
@@ -55,6 +57,7 @@ export function parseCollabConfig(raw: unknown, env: Record<string, string | und
 	const root = raw as Record<string, unknown>;
 	const collabRaw = (root.collab && typeof root.collab === "object" ? root.collab : {}) as Record<string, unknown>;
 	const delaySeconds = cleanInt(collabRaw.rehostDelaySeconds, DEFAULT_CONFIG.rehostDelayMs / 1000);
+	const pollSeconds = Math.max(3, cleanInt(collabRaw.pollSeconds, DEFAULT_CONFIG.pollMs / 1000));
 	const bool = (value: unknown, fallback: boolean): boolean => (typeof value === "boolean" ? value : fallback);
 	return {
 		telegram: parseTelegramSettings(root.telegram, env),
@@ -62,6 +65,7 @@ export function parseCollabConfig(raw: unknown, env: Record<string, string | und
 		autoRehost: bool(collabRaw.autoRehost, DEFAULT_CONFIG.autoRehost),
 		rehostRetries: cleanInt(collabRaw.rehostRetries, DEFAULT_CONFIG.rehostRetries),
 		rehostDelayMs: delaySeconds * 1000,
+		pollMs: pollSeconds * 1000,
 	};
 }
 

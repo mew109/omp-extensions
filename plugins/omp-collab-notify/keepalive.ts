@@ -188,6 +188,7 @@ const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_JITTER_MS = 10_000;
 const DEFAULT_NAME = "keepalive";
 const PID_PREFIX = "omp-collab-keepalive-";
+const MAX_RECONNECTS = 5;
 
 const ENV = {
 	link: "OMP_COLLAB_KEEPALIVE_LINK",
@@ -503,7 +504,6 @@ async function runDaemon(): Promise<void> {
 	const cryptoKey = await importRoomKey(parsed.key);
 
 	let attempt = 0;
-	let notFound = 0;
 	let stopped = false;
 	let ws: WebSocket | null = null;
 	let cancelPing: (() => void) | null = null;
@@ -566,20 +566,17 @@ async function runDaemon(): Promise<void> {
 	const onClose = (code: number, reason: string): void => {
 		write(`closed code=${code} reason=${reason}`);
 		if (stopped) return;
-		if (code === 4001) {
-			finish(0, "room closed by host — exiting");
-			return;
-		}
 		if (code === 4009) {
 			finish(1, "host already connected — exiting");
 			return;
 		}
-		if (code === 4004) {
-			notFound += 1;
-			if (notFound > 5) {
-				finish(1, "no such room — giving up");
-				return;
-			}
+		if (attempt >= MAX_RECONNECTS) {
+			const why = reason === "" ? `close code ${code}` : `close code ${code} (${reason})`;
+			finish(
+				1,
+				`warning: gave up on room ${parsed.roomId} after ${MAX_RECONNECTS} reconnect attempts — last ${why}`,
+			);
+			return;
 		}
 		reconnect();
 	};
@@ -612,7 +609,6 @@ async function runDaemon(): Promise<void> {
 			if (msg === null) return;
 			if (msg.t === "welcome") {
 				attempt = 0;
-				notFound = 0;
 				const session =
 					pickString(recordOf(msg.state)?.sessionName) ?? pickString(recordOf(msg.header)?.title) ?? "?";
 				write(`joined room ${parsed.roomId} — host session "${session}"`);

@@ -191,7 +191,7 @@ export default function ompCollabNotify(pi: ExtensionAPI): void {
 			if (loadConfig().autoRehost) {
 				void rehost(pi, spec).catch(err => logError(`rehost failed: ${err}`));
 			}
-		}, 3000);
+		}, loadConfig().pollMs);
 	});
 
 	pi.on("session_switch", () => {
