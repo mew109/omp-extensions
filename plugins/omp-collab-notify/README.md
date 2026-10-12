@@ -19,6 +19,7 @@ collab:
   autoRehost: true       # re-open a fresh room when the relay kills the current one
   rehostRetries: 2       # extra start attempts after the first rehost try
   rehostDelaySeconds: 5  # pause between rehost attempts
+  pollSeconds: 10        # seconds between loss polls; minimum 3
 ```
 
 The env vars `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` win over the YAML. omp loads `~/.omp/agent/.env` automatically, so that file is a good place for them. Blank values (env or YAML) count as unset. Config changes take effect without a restart.
@@ -29,6 +30,7 @@ The env vars `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` win over the YAML. omp lo
 | `collab.autoRehost` | `true` | Re-open a fresh room when the relay kills the current one. Independent of `notify`. |
 | `collab.rehostRetries` | `2` | Extra start attempts after the first rehost try. |
 | `collab.rehostDelaySeconds` | `5` | Pause between rehost attempts. |
+| `collab.pollSeconds` | `10` | Seconds between loss polls for auto-rehost; minimum 3. Read once when the session starts — changes need an omp restart. |
 
 ## Telegram bot setup
 
@@ -52,7 +54,7 @@ Joins the room as a read-only guest named `keepalive` and pings the relay every 
 - `<link>`: the web link (`https://my.omp.sh/#<id>.<key>`), `my.omp.sh/#<id>.<key>`, a bare `<id>.<key>`, or a `ws(s)://` relay URL. `stop` / `status` also accept a bare `<roomId>`; `stop all` stops every keeper.
 - Flags are in milliseconds: `--interval` (default 60000), `--jitter` (default 10000), `--name` (default `keepalive`, trimmed to 64 chars).
 - Files: `${TMPDIR}/omp-collab-keepalive-<roomId>.pid` (mode 600) and `.log` (one line per event: joins, pings, closes).
-- Close-code policy: 4001 (host closed the room) → exit 0; 4004 (no such room) → retry up to 5 times, then give up; 4009 → exit; 4029 and anything else → reconnect with a 1–30 s randomized backoff.
+- Close-code policy: on any disconnect (4001 room closed, 4004 no such room, network errors, …) the daemon reconnects with a 1–30 s randomized exponential backoff, at most 5 attempts per episode; a successful join resets the count. If all 5 fail it logs a `warning:` line and exits 1. 4009 (another host connected) still exits at once.
 - The link is passed to the detached daemon in its environment, never on the command line, so it does not show up in `ps` output.
 - `OMP_COLLAB_KEEPALIVE_BUN` overrides the `bun` binary used to spawn the daemon (default: `bun` from `PATH`).
 - Standalone, no omp needed: `bun keepalive.ts start '<link>'` — same CLI as the slash command.
@@ -61,7 +63,7 @@ Joins the room as a read-only guest named `keepalive` and pings the relay every 
 
 - A Telegram message with the web + terminal links is sent when a room opens (`/collab`, `/collab start`, `/collab view`). View-only rooms use the read-only links.
 - If a notification is due while `telegram.botToken` / `telegram.chatId` are unset, a TUI warning reminds you to configure them.
-- Auto-rehost: when the relay kills the room without user action (fatal closes — host conflict, room closed / full / no such room), the plugin re-opens a fresh writable room (new link) and Telegram receives the new links. After `1 + rehostRetries` failed attempts a failure message is sent instead. Never triggers on `/collab stop`, session switch, or app exit.
+- Auto-rehost: a loss poll (default 10 s, `collab.pollSeconds`) watches for a room killed without user action (fatal closes — host conflict, room closed / full / no such room); the plugin re-opens a fresh writable room (new link) and Telegram receives the new links. After `1 + rehostRetries` failed attempts a failure message is sent instead. Never triggers on `/collab stop`, session switch, or app exit.
 - Guest mode (`/join`) never notifies.
 
 ## Switching in a running session
