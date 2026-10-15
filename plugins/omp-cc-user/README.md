@@ -23,7 +23,7 @@ Two entry points run the same script and relay its output verbatim:
 - the `omp-cc-user` skill:
 
 ```bash
-python3 skill://omp-cc-user/scripts/omp_cc_user.py <args>
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" <args>
 ```
 
 From a repo checkout, call

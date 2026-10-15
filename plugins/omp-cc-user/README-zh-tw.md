@@ -23,7 +23,7 @@ Claude Code 本身不受影響。
 - `omp-cc-user` skill:
 
 ```bash
-python3 skill://omp-cc-user/scripts/omp_cc_user.py <args>
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" <args>
 ```
 
 從 repo checkout 呼叫時,直接跑

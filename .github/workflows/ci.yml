@@ -56,6 +56,8 @@ jobs:
           '
       - name: python syntax check omp-cc-user
         run: python3 -m py_compile plugins/omp-cc-user/skills/omp-cc-user/scripts/omp_cc_user.py
+      - name: test omp-cc-user
+        run: bun test plugins/omp-cc-user
 
   check-windows:
     runs-on: windows-latest
@@ -91,3 +93,5 @@ jobs:
         run: bunx tsc@7.0.2 --noEmit -p plugins/dump-as-curl
       - name: typecheck omp-herdr-tab-title
         run: bunx tsc@7.0.2 --noEmit -p plugins/omp-herdr-tab-title
+      - name: test omp-cc-user
+        run: bun test plugins/omp-cc-user
