@@ -19,16 +19,16 @@ directly):
 
 ```bash
 # usage table
-python3 skill://omp-cc-user/scripts/omp_cc_user.py
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py"
 
 # names: one or more per call; fnmatch globs (* ? [) allowed — quote them;
 # every name must match at least one item, or nothing is written
-python3 skill://omp-cc-user/scripts/omp_cc_user.py skill list
-python3 skill://omp-cc-user/scripts/omp_cc_user.py plugin list
-python3 skill://omp-cc-user/scripts/omp_cc_user.py command disable setup
-python3 skill://omp-cc-user/scripts/omp_cc_user.py plugin disable 'code-*'
-python3 skill://omp-cc-user/scripts/omp_cc_user.py skill enable 'ruff' 'ponytail*'
-python3 skill://omp-cc-user/scripts/omp_cc_user.py mcp list
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" skill list
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" plugin list
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" command disable setup
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" plugin disable 'code-*'
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" skill enable 'ruff' 'ponytail*'
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" mcp list
 ```
 
 Full command table and name rules: see `SKILL.md`.

@@ -34,7 +34,7 @@
     {
       "name": "omp-cc-user",
       "description": "Manage personal ~/.claude resources (skills, plugins, commands, mcp servers) and their omp visibility",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/omp-cc-user"

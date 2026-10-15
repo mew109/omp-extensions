@@ -35,8 +35,17 @@ name must match at least one item or nothing is written.
 Run via bash, then relay the script output verbatim to the user — no interpretation needed:
 
 ```bash
-python3 skill://omp-cc-user/scripts/omp_cc_user.py <args>
+python3 "$(realpath skill://omp-cc-user)/scripts/omp_cc_user.py" <args>
 ```
+
+`realpath` on the `skill://` URI resolves to this skill's install directory,
+so the command works on any machine regardless of where the plugin cache
+lives. Resolution is done by omp's bash tool itself (injected skill
+filesystem + bundled coreutils), so it behaves the same on Windows, Linux
+and macOS. Do not pass the `skill://` path to `python3` directly — external
+programs receive it as a literal string and the file will not be found.
+If the plugin was upgraded while this session was already open, the skill
+registry is stale: start a new session and the path resolves again.
 
 On Windows, if `python3` is not on PATH, use `python` or `py -3` with the same arguments.
 
