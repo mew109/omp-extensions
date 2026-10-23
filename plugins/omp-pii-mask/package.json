@@ -1,6 +1,6 @@
 {
   "name": "omp-pii-mask",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "devDependencies": {
     "@oh-my-pi/pi-coding-agent": "18.0.4",

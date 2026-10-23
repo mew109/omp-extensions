@@ -66,7 +66,7 @@
     {
       "name": "omp-pii-mask",
       "description": "Mask PII before it reaches the LLM and restore it in tool calls and replies (/pii-map)",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "productivity",
       "license": "MIT",
       "source": "./plugins/omp-pii-mask"

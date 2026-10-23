@@ -35,6 +35,10 @@ assistant 回覆中透明還原。模型只看到 `[EMAIL_1]` 這類 placeholder
 PHONE 預設關閉:它的 regex 會命中所有 10 位連續數字——Unix 時間戳、訂單
 編號等都是。確定流量中有真實電話號碼再開。
 
+EMAIL 不遮罩 git remote:`[EMAIL_130]` 在 scp(`[EMAIL_131]`)與 `ssh://`
+兩種形式都保持原樣,`user@host:owner/repo` 的 scp URL 也保持完整,clone
+網址因此可讀。其餘 email(含 `ssh://` URL 中非 `git@` 的帳號)照常遮罩。
+
 ## 運作方式
 
 ```

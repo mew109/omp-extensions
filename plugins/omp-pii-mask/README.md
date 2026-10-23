@@ -37,6 +37,11 @@ PHONE is off by default because its regex matches every 10-digit run —
 Unix timestamps, order numbers, and so on. Turn it on only if you expect
 real phone numbers in your traffic.
 
+EMAIL does not mask git remotes: `[EMAIL_130]` stays visible in both
+scp (`[EMAIL_131]`) and `ssh://` forms, and `user@host:owner/repo` scp
+URLs stay whole, so clone URLs remain readable. All other addresses,
+including non-`git@` users in `ssh://` URLs, are still masked.
+
 ## How it works
 
 ```
