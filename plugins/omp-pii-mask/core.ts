@@ -13,7 +13,10 @@ export interface PiiPattern {
 }
 
 export const PATTERNS: PiiPattern[] = [
-	{ name: "EMAIL", regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g },
+	// `\b(?!git@)` keeps the git remote service account visible (git@host:…,
+	// ssh://git@host/…); the trailing lookahead keeps `user@host:owner/repo`
+	// SCP URLs whole. The TLD `\b` blocks shorter-host backtracking into them.
+	{ name: "EMAIL", regex: /\b(?!git@)[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b(?!:[\w.-]+\/[\w.-])/g },
 	{ name: "PHONE", regex: /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g },
 	{ name: "SSN", regex: /\b\d{3}-\d{2}-\d{4}\b/g },
 	{ name: "CC", regex: /\b(?:\d{4}[-\s]?){3}\d{4}\b/g },

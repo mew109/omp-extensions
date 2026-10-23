@@ -61,6 +61,36 @@ describe("mask/unmask roundtrip", () => {
 	});
 });
 
+describe("EMAIL git URL exemption", () => {
+	test("leaves git@ remotes unmasked in scp and ssh URL form", () => {
+		const r = freshNoPhone();
+		const scp = "[EMAIL_122]:mew109/omp-extensions.git";
+		const ssh = "ssh://[EMAIL_122]/mew109/omp-extensions.git";
+		expect(r.mask(scp)).toBe(scp);
+		expect(r.mask(ssh)).toBe(ssh);
+	});
+
+	test("leaves owner/repo scp URLs whole for non-git users", () => {
+		const r = freshNoPhone();
+		const url = "[EMAIL_123]:mew109/omp-extensions.git";
+		const masked = r.mask(url);
+		expect(masked).toBe(url);
+	});
+
+	test("still masks personal emails, including after a colon+space", () => {
+		const r = freshNoPhone();
+		expect(r.mask("contact [EMAIL_124] now")).toContain("[EMAIL_");
+		expect(r.mask("contact [EMAIL_124]: note")).toContain("[EMAIL_");
+	});
+
+	test("still masks other users in ssh:// URLs", () => {
+		const r = freshNoPhone();
+		const masked = r.mask("ssh://[EMAIL_125]/mew109/omp-extensions.git");
+		expect(masked).toContain("[EMAIL_");
+		expect(r.unmask(masked)).toBe("ssh://[EMAIL_125]/mew109/omp-extensions.git");
+	});
+});
+
 describe("PHONE toggle", () => {
 	test("default set leaves timestamps and 10-digit numbers alone", () => {
 		const r = freshNoPhone();
